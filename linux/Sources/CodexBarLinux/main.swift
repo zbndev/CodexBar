@@ -29,6 +29,9 @@ app.onActivate = {
     let madeStore = LinuxUsageStore { payload in
         MainLoopDispatch.onMainLoop {
             bridge?.send(.snapshot(payload))
+            if let highest = store?.highestUsedPercent() {
+                tray?.setLabel("\(Int(highest.rounded()))%")
+            }
         }
     }
 
@@ -77,6 +80,8 @@ app.onActivate = {
     bridge = madeBridge
     tray = madeTray
     store = madeStore
+
+    madeStore.startPeriodicRefresh(intervalSeconds: 300)
 }
 
 let status = app.run()

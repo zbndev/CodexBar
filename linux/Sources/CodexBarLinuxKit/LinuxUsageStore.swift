@@ -90,4 +90,34 @@ public final class LinuxUsageStore: @unchecked Sendable {
             self.store(view)
         }
     }
+
+    private var refreshTask: Task<Void, Never>?
+
+    /// Refreshes every `intervalSeconds` until stopped. A fixed interval is
+    /// enough for M2; adaptive scheduling arrives with the rest of the
+    /// refresh policy later.
+    public func startPeriodicRefresh(intervalSeconds: Double = 300) {
+        self.stopPeriodicRefresh()
+        self.refreshTask = Task.detached { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(intervalSeconds))
+                guard !Task.isCancelled else { return }
+                self?.refreshAll()
+            }
+        }
+    }
+
+    public func stopPeriodicRefresh() {
+        self.refreshTask?.cancel()
+        self.refreshTask = nil
+    }
+
+    /// The largest `usedPercent` across every window of every provider, for
+    /// the tray label. Nil when nothing has loaded yet.
+    public func highestUsedPercent() -> Double? {
+        self.lock.lock()
+        defer { self.lock.unlock() }
+        let percentages = self.views.values.flatMap { $0.windows.map(\.usedPercent) }
+        return percentages.max()
+    }
 }

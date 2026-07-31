@@ -22,13 +22,21 @@
 html, body {
   margin: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--fg);
-  font: 13px/1.45 system-ui, -apple-system, sans-serif;
   overflow-x: hidden;
 }
 
+/* Column layout so the footer sits on the bottom edge however short the
+   content is, and the detail pane — not the page — takes the scrollbar. */
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.45 system-ui, -apple-system, sans-serif;
+}
+
 .provider-strip {
+  flex: 0 0 auto;
   display: flex;
   gap: 4px;
   padding: 10px 10px 0;
@@ -46,7 +54,12 @@ html, body {
   cursor: pointer;
   font: inherit;
   font-size: 11px;
-  text-align: center;
+  /* Centring is done by the flex box, not by `margin: auto` on the icon:
+     brand SVGs disagree about intrinsic size, and several size themselves
+     in `em`. A fixed box with a stretched SVG makes them all agree. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .provider-tab.is-selected {
@@ -54,22 +67,51 @@ html, body {
   color: var(--fg);
 }
 
-.provider-tab svg {
+.provider-tab .icon {
+  flex: 0 0 auto;
   width: 22px;
   height: 22px;
-  display: block;
-  margin: 0 auto 3px;
+  margin-bottom: 3px;
 }
 
-.provider-tab .accent {
+.provider-tab .icon svg {
+  width: 100%;
+  height: 100%;
   display: block;
+}
+
+.provider-tab .label {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+/* Not decoration: a usage bar for the provider's most-used window, matching
+   the track/fill pair used in the detail pane below. */
+.provider-tab .usage {
+  width: 100%;
   height: 3px;
   margin-top: 5px;
   border-radius: 2px;
-  background: var(--accent, transparent);
+  background: var(--track);
+  overflow: hidden;
 }
 
-.detail { padding: 14px 16px 4px; }
+.provider-tab .usage-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent, transparent);
+  transition: width 0.3s ease;
+}
+
+.detail {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 14px 16px 4px;
+}
 
 .detail h1 { margin: 0; font-size: 21px; font-weight: 600; }
 
@@ -108,6 +150,7 @@ html, body {
 .state.is-error { color: #d0453b; }
 
 .footer {
+  flex: 0 0 auto;
   display: flex;
   gap: 8px;
   padding: 10px 16px 14px;

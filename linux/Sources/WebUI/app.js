@@ -32,6 +32,17 @@ function selected() {
   return state.providers.find((p) => p.id === state.selectedID) || null;
 }
 
+/// The provider's most-used window, which is what its strip bar reports.
+/// Null while nothing has loaded, so the bar renders as an empty track.
+function highestUsedPercent(provider) {
+  if (!provider.windows || provider.windows.length === 0) return null;
+  return provider.windows.reduce((highest, w) => Math.max(highest, w.usedPercent), 0);
+}
+
+function clampPercent(value) {
+  return Math.max(0, Math.min(100, value));
+}
+
 function formatReset(window) {
   if (window.resetDescription) return window.resetDescription;
   if (!window.resetsAt) return '';
@@ -55,18 +66,25 @@ function renderStrip() {
 
     if (provider.iconSVG) {
       const holder = document.createElement('span');
+      holder.className = 'icon';
       // Icons ship with the app and are not user input.
       holder.innerHTML = provider.iconSVG;
       tab.appendChild(holder);
     }
 
     const name = document.createElement('span');
+    name.className = 'label';
     name.textContent = provider.displayName;
     tab.appendChild(name);
 
-    const accent = document.createElement('span');
-    accent.className = 'accent';
-    tab.appendChild(accent);
+    const usage = document.createElement('span');
+    usage.className = 'usage';
+    const usageFill = document.createElement('span');
+    usageFill.className = 'usage-fill';
+    const used = highestUsedPercent(provider);
+    usageFill.style.width = used === null ? '0%' : `${clampPercent(used)}%`;
+    usage.appendChild(usageFill);
+    tab.appendChild(usage);
 
     tab.addEventListener('click', () => {
       state.selectedID = provider.id;
@@ -145,7 +163,7 @@ function renderDetail() {
     bar.className = 'bar';
     const fill = document.createElement('div');
     fill.className = 'bar-fill';
-    fill.style.width = `${Math.max(0, Math.min(100, window.usedPercent))}%`;
+    fill.style.width = `${clampPercent(window.usedPercent)}%`;
     bar.appendChild(fill);
     section.appendChild(bar);
 

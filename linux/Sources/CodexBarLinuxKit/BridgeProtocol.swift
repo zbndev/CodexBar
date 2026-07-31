@@ -1,3 +1,4 @@
+import CodexBarCore
 import Foundation
 
 /// Messages sent from the web UI to Swift.
@@ -13,6 +14,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case settingsReady
     case updateProviderConfig(id: String, patch: ProviderConfigPatch)
     case updateSettings(LinuxSettings)
+    case updateHooks(HooksConfig)
+    case openConfigFolder
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -21,6 +24,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case url
         case patch
         case settings
+        case hooks
     }
 
     public init(from decoder: any Decoder) throws {
@@ -47,6 +51,10 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
                 patch: try container.decode(ProviderConfigPatch.self, forKey: .patch))
         case "updateSettings":
             self = .updateSettings(try container.decode(LinuxSettings.self, forKey: .settings))
+        case "updateHooks":
+            self = .updateHooks(try container.decode(HooksConfig.self, forKey: .hooks))
+        case "openConfigFolder":
+            self = .openConfigFolder
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -82,6 +90,11 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case let .updateSettings(settings):
             try container.encode("updateSettings", forKey: .type)
             try container.encode(settings, forKey: .settings)
+        case let .updateHooks(hooks):
+            try container.encode("updateHooks", forKey: .type)
+            try container.encode(hooks, forKey: .hooks)
+        case .openConfigFolder:
+            try container.encode("openConfigFolder", forKey: .type)
         }
     }
 }

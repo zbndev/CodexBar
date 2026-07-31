@@ -5,17 +5,20 @@ import Foundation
 public struct SettingsPayload: Codable, Equatable, Sendable {
     public var generatedAt: Date
     public var settings: LinuxSettings
+    public var general: [GeneralPane]
     public var providers: [ProviderPanePayload]
     public var hooks: HooksConfig
 
     public init(
         generatedAt: Date,
         settings: LinuxSettings,
+        general: [GeneralPane],
         providers: [ProviderPanePayload],
         hooks: HooksConfig)
     {
         self.generatedAt = generatedAt
         self.settings = settings
+        self.general = general
         self.providers = providers
         self.hooks = hooks
     }

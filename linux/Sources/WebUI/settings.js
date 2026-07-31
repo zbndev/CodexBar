@@ -250,10 +250,28 @@ function currentValues(rows, providerID) {
 function applyEdit(providerID, key, value) {
   if (providerID) {
     sendProviderPatch(providerID, { [key]: value });
+    return;
+  }
+  if (key === 'hooksEnabled') {
+    const hooks = state.payload.hooks || { enabled: false, events: [] };
+    hooks.enabled = Boolean(value);
+    bridge.send({ type: 'updateHooks', hooks });
+    return;
+  }
+  // Two shapes don't survive a straight key write-back: booleans shown as
+  // pickers arrive as "true"/"false" strings, and threshold lists arrive as
+  // comma-separated text.
+  if (key === 'usageBarsShowUsed' || key === 'resetTimesShowAbsolute') {
+    state.payload.settings[key] = value === 'true';
+  } else if (key.endsWith('Thresholds')) {
+    state.payload.settings[key] = String(value)
+      .split(',')
+      .map((piece) => parseInt(piece.trim(), 10))
+      .filter((number) => !Number.isNaN(number));
   } else {
     state.payload.settings[key] = value;
-    sendSettingsUpdate();
   }
+  sendSettingsUpdate();
 }
 
 function handleAction(action) {

@@ -57,6 +57,7 @@ import Testing
     let payload = SettingsPayload(
         generatedAt: Date(timeIntervalSince1970: 0),
         settings: LinuxSettings(),
+        general: [],
         providers: [],
         hooks: HooksConfig())
     let encoder = JSONEncoder()
@@ -66,4 +67,18 @@ import Testing
     let decoded = try decoder.decode(
         BridgeEvent.self, from: encoder.encode(BridgeEvent.settings(payload)))
     #expect(decoded == .settings(payload))
+}
+
+@Test func `an update-hooks command round-trips`() throws {
+    let original = BridgeCommand.updateHooks(HooksConfig(enabled: true, events: []))
+    let decoded = try JSONDecoder().decode(
+        BridgeCommand.self, from: JSONEncoder().encode(original))
+    #expect(decoded == original)
+}
+
+@Test func `open-config-folder command round-trips`() throws {
+    let original = BridgeCommand.openConfigFolder
+    let decoded = try JSONDecoder().decode(
+        BridgeCommand.self, from: JSONEncoder().encode(original))
+    #expect(decoded == original)
 }

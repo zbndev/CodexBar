@@ -38,11 +38,14 @@ public final class SettingsCoordinator: @unchecked Sendable {
                 for: descriptor,
                 config: config?.providers.first { $0.id == descriptor.id })
         }
+        let settings = self.linuxSettings()
+        let hooks = config?.hooks ?? HooksConfig()
         return SettingsPayload(
             generatedAt: Date(),
-            settings: self.linuxSettings(),
+            settings: settings,
+            general: GeneralPaneCatalog.panes(settings: settings, hooks: hooks),
             providers: panes,
-            hooks: config?.hooks ?? HooksConfig())
+            hooks: hooks)
     }
 
     public func applyProviderPatch(id: String, patch: ProviderConfigPatch) throws {
@@ -61,6 +64,13 @@ public final class SettingsCoordinator: @unchecked Sendable {
 
     public func applySettings(_ settings: LinuxSettings) throws {
         try self.settingsStore.save(settings)
+        self.onChange()
+    }
+
+    public func applyHooks(_ hooks: HooksConfig) throws {
+        var config = try self.configStore.load() ?? CodexBarConfig.makeDefault()
+        config.hooks = hooks
+        try self.configStore.save(config)
         self.onChange()
     }
 

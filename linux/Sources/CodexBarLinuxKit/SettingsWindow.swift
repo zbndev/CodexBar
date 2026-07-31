@@ -1,3 +1,4 @@
+import CodexBarCore
 import Foundation
 
 /// The settings window: a decorated window with its own web view and
@@ -45,6 +46,17 @@ public final class SettingsWindow: @unchecked Sendable {
                     try coordinator.applySettings(settings)
                 } catch {
                     coordinator.reportError("Could not save settings: \(error)")
+                }
+            case let .updateHooks(hooks):
+                do {
+                    try coordinator.applyHooks(hooks)
+                } catch {
+                    coordinator.reportError("Could not save hooks: \(error)")
+                }
+            case .openConfigFolder:
+                MainLoopDispatch.onMainLoop {
+                    SystemBrowser.openPath(
+                        CodexBarConfigStore.defaultURL().deletingLastPathComponent().path)
                 }
             case let .openURL(url):
                 MainLoopDispatch.onMainLoop { SystemBrowser.open(url) }

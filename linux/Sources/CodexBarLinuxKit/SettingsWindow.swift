@@ -53,6 +53,18 @@ public final class SettingsWindow: @unchecked Sendable {
                 } catch {
                     coordinator.reportError("Could not save hooks: \(error)")
                 }
+            case let .replaceTokenAccounts(providerID, data):
+                do {
+                    try coordinator.replaceTokenAccounts(providerID: providerID, data: data)
+                } catch {
+                    coordinator.reportError("Could not save token accounts: \(error)")
+                }
+            case let .updateQuotaWarnings(providerID, warnings):
+                do {
+                    try coordinator.updateQuotaWarnings(providerID: providerID, config: warnings)
+                } catch {
+                    coordinator.reportError("Could not save quota warnings: \(error)")
+                }
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

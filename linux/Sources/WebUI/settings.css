@@ -102,3 +102,14 @@ body { display: flex; }
 
 .state { padding: 20px 0; color: var(--fg-dim); }
 .state.is-error { color: #d0453b; }
+
+.collection-row { gap: 8px; }
+.collection-row input { min-width: 0; }
+.collection-card {
+  padding: 10px;
+  margin: 8px 0;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--track);
+}
+.collection-card .row:last-of-type { border-bottom: 0; }

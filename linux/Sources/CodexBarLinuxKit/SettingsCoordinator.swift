@@ -67,6 +67,43 @@ public final class SettingsCoordinator: @unchecked Sendable {
         self.onChange()
     }
 
+    /// Dedicated commands rather than patch fields: here a nil value means
+    /// "clear the override", whereas an omitted `ProviderConfigPatch` key
+    /// means "unchanged". Keeping them separate avoids a tri-state encoding.
+    public func replaceTokenAccounts(
+        providerID: String,
+        data: ProviderTokenAccountData?) throws
+    {
+        try self.updateProvider(id: providerID) { $0.tokenAccounts = data }
+    }
+
+    public func updateQuotaWarnings(
+        providerID: String,
+        config warnings: QuotaWarningConfig?) throws
+    {
+        try self.updateProvider(id: providerID) { $0.quotaWarnings = warnings }
+    }
+
+    private func updateProvider(
+        id: String,
+        mutation: (inout ProviderConfig) -> Void) throws
+    {
+        guard let provider = UsageProvider(rawValue: id) else {
+            throw CoordinatorError.unknownProvider(id)
+        }
+        var config = try self.configStore.load() ?? CodexBarConfig.makeDefault()
+        let index: Int
+        if let existing = config.providers.firstIndex(where: { $0.id == provider }) {
+            index = existing
+        } else {
+            config.providers.append(ProviderConfig(id: provider))
+            index = config.providers.index(before: config.providers.endIndex)
+        }
+        mutation(&config.providers[index])
+        try self.configStore.save(config)
+        self.onChange()
+    }
+
     public func applyHooks(_ hooks: HooksConfig) throws {
         var config = try self.configStore.load() ?? CodexBarConfig.makeDefault()
         config.hooks = hooks

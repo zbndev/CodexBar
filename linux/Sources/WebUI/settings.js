@@ -280,40 +280,225 @@ function handleAction(action) {
   if (action === 'openConfigFolder') bridge.send({ type: 'openConfigFolder' });
 }
 
-// --- Dynamic sections (read-only until Task 7) ----------------------------
+// --- Dynamic collection editors -------------------------------------------
 
 function renderTokenAccounts(container, providerID) {
-  const title = document.createElement('div');
-  title.className = 'section-title';
-  title.textContent = 'Token accounts';
-  container.appendChild(title);
-  const info = document.createElement('p');
-  info.className = 'state';
-  info.textContent = 'Token accounts are stored in the shared CodexBar config.';
-  container.appendChild(info);
+  const provider = state.payload.providers.find((p) => p.id === providerID);
+  const data = provider.tokenAccounts || { version: 1, accounts: [], activeIndex: 0 };
+  container.appendChild(sectionTitle('Token accounts'));
+
+  data.accounts.forEach((account, index) => {
+    const line = document.createElement('div');
+    line.className = 'row collection-row';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = `active-${providerID}`;
+    radio.checked = index === data.activeIndex;
+    radio.addEventListener('change', () => {
+      data.activeIndex = index;
+      replaceTokenAccounts(providerID, data);
+    });
+    const label = document.createElement('span');
+    label.className = 'row-title';
+    label.textContent = account.label;
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => {
+      data.accounts.splice(index, 1);
+      data.activeIndex = Math.max(0, Math.min(data.activeIndex, data.accounts.length - 1));
+      // An empty list clears the override rather than persisting an empty shell.
+      replaceTokenAccounts(providerID, data.accounts.length ? data : null);
+    });
+    line.append(radio, label, remove);
+    container.appendChild(line);
+  });
+
+  const form = document.createElement('div');
+  form.className = 'row collection-row';
+  const labelInput = textInput('Label');
+  const tokenInput = textInput('Token', true);
+  const scopeInput = textInput('Usage scope (optional)');
+  const organizationInput = textInput('Organization ID (optional)');
+  const workspaceInput = textInput('Workspace ID (optional)');
+  const add = document.createElement('button');
+  add.textContent = 'Add';
+  add.addEventListener('click', () => {
+    if (!labelInput.value.trim() || !tokenInput.value.trim()) return;
+    data.accounts.push({
+      id: crypto.randomUUID(),
+      label: labelInput.value.trim(),
+      token: tokenInput.value.trim(),
+      addedAt: Date.now() / 1000,
+      lastUsed: null,
+      externalIdentifier: null,
+      usageScope: scopeInput.value.trim() || null,
+      // Wire name: ProviderTokenAccount maps organizationID to "organizationId".
+      organizationId: organizationInput.value.trim() || null,
+      workspaceID: workspaceInput.value.trim() || null,
+    });
+    data.activeIndex = data.accounts.length - 1;
+    replaceTokenAccounts(providerID, data);
+  });
+  form.append(labelInput, tokenInput, scopeInput, organizationInput, workspaceInput, add);
+  container.appendChild(form);
+}
+
+function replaceTokenAccounts(providerID, data) {
+  bridge.send({ type: 'replaceTokenAccounts', providerID, data });
 }
 
 function renderQuotaWarnings(container, providerID) {
-  const title = document.createElement('div');
-  title.className = 'section-title';
-  title.textContent = 'Quota warnings';
-  container.appendChild(title);
-  const info = document.createElement('p');
-  info.className = 'state';
-  info.textContent = 'Global thresholds apply unless this provider has an override.';
-  container.appendChild(info);
+  const provider = state.payload.providers.find((p) => p.id === providerID);
+  const config = provider.quotaWarnings || {};
+  container.appendChild(sectionTitle('Quota warnings'));
+  for (const windowName of ['session', 'weekly']) {
+    const current = config[windowName] || { enabled: true, thresholds: [50, 20] };
+    const enabled = document.createElement('input');
+    enabled.type = 'checkbox';
+    enabled.checked = current.enabled !== false;
+    enabled.addEventListener('change', () => {
+      current.enabled = enabled.checked;
+      config[windowName] = current;
+      bridge.send({ type: 'updateQuotaWarnings', providerID, config });
+    });
+    container.appendChild(labeledRow(capitalize(windowName), () => enabled));
+
+    const thresholds = textInput('50,20');
+    thresholds.value = (current.thresholds || [50, 20]).join(',');
+    thresholds.addEventListener('change', () => {
+      current.thresholds = parseThresholds(thresholds.value);
+      config[windowName] = current;
+      bridge.send({ type: 'updateQuotaWarnings', providerID, config });
+    });
+    container.appendChild(labeledRow(`${capitalize(windowName)} thresholds`, () => thresholds));
+  }
+  const clear = document.createElement('button');
+  clear.textContent = 'Use global defaults';
+  clear.addEventListener('click', () => {
+    bridge.send({ type: 'updateQuotaWarnings', providerID, config: null });
+  });
+  container.appendChild(clear);
 }
 
 function renderHooks(container) {
-  const rules = (state.payload.hooks && state.payload.hooks.events) || [];
+  const hooks = state.payload.hooks || { enabled: false, events: [] };
+  container.appendChild(sectionTitle('Hook rules'));
+  hooks.events.forEach((rule, index) => {
+    const card = document.createElement('div');
+    card.className = 'collection-card';
+    card.appendChild(toggleControl('Enabled', rule.enabled, (value) => {
+      rule.enabled = value;
+      saveHooks(hooks);
+    }));
+    card.appendChild(selectControl('Event', [
+      'quota_low', 'quota_reached', 'quota_reset',
+      'provider_unavailable', 'provider_recovered', 'refresh_failed',
+    ], rule.event, (value) => { rule.event = value; saveHooks(hooks); }));
+    card.appendChild(selectControl(
+      'Provider', [''].concat(state.payload.providers.map((p) => p.id)),
+      rule.provider || '',
+      (value) => { rule.provider = value || null; saveHooks(hooks); }));
+    if (rule.event === 'quota_low') {
+      // Stored as a 0...1 fraction, edited as a percentage.
+      card.appendChild(fieldControl(
+        'Threshold (%)', rule.threshold == null ? '' : String(rule.threshold * 100), false,
+        (value) => {
+          const percent = Number(value);
+          rule.threshold = Number.isFinite(percent) ? Math.min(100, Math.max(1, percent)) / 100 : null;
+          saveHooks(hooks);
+        }));
+    }
+    card.appendChild(fieldControl('Executable', rule.executable, false, (value) => {
+      rule.executable = value;
+      saveHooks(hooks);
+    }));
+    card.appendChild(fieldControl('Arguments (one per line)', (rule.arguments || []).join('\n'), false, (value) => {
+      rule.arguments = value.split('\n').filter(Boolean);
+      saveHooks(hooks);
+    }));
+    const remove = document.createElement('button');
+    remove.textContent = 'Delete rule';
+    remove.addEventListener('click', () => {
+      hooks.events.splice(index, 1);
+      saveHooks(hooks);
+    });
+    card.appendChild(remove);
+    container.appendChild(card);
+  });
+  const add = document.createElement('button');
+  add.textContent = 'Add rule';
+  // Mirrors HooksConfig.maximumRuleCount.
+  add.disabled = hooks.events.length >= 32;
+  add.addEventListener('click', () => {
+    hooks.events.push({
+      id: crypto.randomUUID(), enabled: true, event: 'refresh_failed',
+      provider: null, threshold: null, executable: '', arguments: [], timeoutSeconds: 10,
+    });
+    saveHooks(hooks);
+  });
+  container.appendChild(add);
+}
+
+function saveHooks(hooks) {
+  bridge.send({ type: 'updateHooks', hooks });
+}
+
+function sectionTitle(text) {
   const title = document.createElement('div');
   title.className = 'section-title';
-  title.textContent = `Hook rules (${rules.length})`;
-  container.appendChild(title);
-  const info = document.createElement('p');
-  info.className = 'state';
-  info.textContent = rules.length ? rules.map((rule) => rule.event).join(', ') : 'No hook rules configured.';
-  container.appendChild(info);
+  title.textContent = text;
+  return title;
+}
+
+function textInput(placeholder, secure = false) {
+  const input = document.createElement('input');
+  input.type = secure ? 'password' : 'text';
+  input.placeholder = placeholder;
+  input.autocomplete = 'off';
+  return input;
+}
+
+function parseThresholds(value) {
+  return value.split(',').map((part) => parseInt(part.trim(), 10))
+    .filter((number) => Number.isInteger(number) && number >= 0 && number <= 99)
+    .filter((number, index, values) => values.indexOf(number) === index)
+    .sort((a, b) => b - a);
+}
+
+function capitalize(value) { return value.charAt(0).toUpperCase() + value.slice(1); }
+
+function toggleControl(title, value, onChange) {
+  return labeledRow(title, () => {
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = Boolean(value);
+    input.addEventListener('change', () => onChange(input.checked));
+    return input;
+  });
+}
+
+function selectControl(title, options, selected, onChange) {
+  return labeledRow(title, () => {
+    const select = document.createElement('select');
+    for (const value of options) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = value || 'Any provider';
+      option.selected = value === selected;
+      select.appendChild(option);
+    }
+    select.addEventListener('change', () => onChange(select.value));
+    return select;
+  });
+}
+
+function fieldControl(title, value, secure, onChange) {
+  return labeledRow(title, () => {
+    const input = textInput('', secure);
+    input.value = value == null ? '' : String(value);
+    input.addEventListener('change', () => onChange(input.value));
+    return input;
+  });
 }
 
 window.addEventListener('DOMContentLoaded', () => {

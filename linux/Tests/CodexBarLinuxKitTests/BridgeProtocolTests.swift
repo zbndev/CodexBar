@@ -82,3 +82,31 @@ import Testing
         BridgeCommand.self, from: JSONEncoder().encode(original))
     #expect(decoded == original)
 }
+
+@Test func `replace-token-accounts command round-trips`() throws {
+    let account = ProviderTokenAccount(
+        id: UUID(), label: "Work", token: "secret", addedAt: 0, lastUsed: nil,
+        usageScope: "team", organizationID: "org-1", workspaceID: "workspace-1")
+    let data = ProviderTokenAccountData(version: 1, accounts: [account], activeIndex: 0)
+    let original = BridgeCommand.replaceTokenAccounts(providerID: "zai", data: data)
+    let decoded = try JSONDecoder().decode(
+        BridgeCommand.self, from: JSONEncoder().encode(original))
+    #expect(decoded == original)
+}
+
+@Test func `provider quota-warning command round-trips`() throws {
+    let config = QuotaWarningConfig(
+        session: QuotaWarningWindowConfig(thresholds: [50, 20], enabled: true),
+        weekly: nil)
+    let original = BridgeCommand.updateQuotaWarnings(providerID: "claude", config: config)
+    let decoded = try JSONDecoder().decode(
+        BridgeCommand.self, from: JSONEncoder().encode(original))
+    #expect(decoded == original)
+}
+
+@Test func `clearing a quota-warning override round-trips as an absent config`() throws {
+    let original = BridgeCommand.updateQuotaWarnings(providerID: "claude", config: nil)
+    let decoded = try JSONDecoder().decode(
+        BridgeCommand.self, from: JSONEncoder().encode(original))
+    #expect(decoded == original)
+}

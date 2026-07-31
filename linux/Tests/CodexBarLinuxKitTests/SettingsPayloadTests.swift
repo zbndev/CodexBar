@@ -139,3 +139,48 @@ private final class TestFlag: @unchecked Sendable {
         return false
     } == true)
 }
+
+@Test func `replacing token accounts persists the account list and active index`() throws {
+    let (configStore, settingsStore) = tempStores()
+    let coordinator = SettingsCoordinator(
+        configStore: configStore, settingsStore: settingsStore, onChange: {})
+    let account = ProviderTokenAccount(
+        id: UUID(), label: "Work", token: "secret", addedAt: 0, lastUsed: nil,
+        usageScope: "team", organizationID: "org-1", workspaceID: "workspace-1")
+    let data = ProviderTokenAccountData(version: 1, accounts: [account], activeIndex: 0)
+    try coordinator.replaceTokenAccounts(providerID: "zai", data: data)
+    let stored = try configStore.load()?.providers
+        .first { $0.id == .zai }?.tokenAccounts
+    #expect(stored?.accounts.count == 1)
+    #expect(stored?.accounts.first?.label == "Work")
+    #expect(stored?.accounts.first?.usageScope == "team")
+    #expect(stored?.accounts.first?.organizationID == "org-1")
+    #expect(stored?.accounts.first?.workspaceID == "workspace-1")
+    #expect(stored?.activeIndex == 0)
+}
+
+@Test func `clearing provider quota warnings restores inheritance`() throws {
+    let (configStore, settingsStore) = tempStores()
+    let coordinator = SettingsCoordinator(
+        configStore: configStore, settingsStore: settingsStore, onChange: {})
+    let warnings = QuotaWarningConfig(
+        session: QuotaWarningWindowConfig(thresholds: [60, 25], enabled: true),
+        weekly: nil)
+    try coordinator.updateQuotaWarnings(providerID: "claude", config: warnings)
+    try coordinator.updateQuotaWarnings(providerID: "claude", config: nil)
+    let stored = try configStore.load()?.providers
+        .first { $0.id == .claude }?.quotaWarnings
+    #expect(stored == nil)
+}
+
+@Test func `saving hooks persists the complete rules array`() throws {
+    let (configStore, settingsStore) = tempStores()
+    let coordinator = SettingsCoordinator(
+        configStore: configStore, settingsStore: settingsStore, onChange: {})
+    let rule = HookRule(event: .refreshFailed, executable: "/bin/true")
+    try coordinator.applyHooks(HooksConfig(enabled: true, events: [rule]))
+    let hooks = try configStore.load()?.hooks
+    #expect(hooks?.enabled == true)
+    #expect(hooks?.events.count == 1)
+    #expect(hooks?.events.first?.executable == "/bin/true")
+}

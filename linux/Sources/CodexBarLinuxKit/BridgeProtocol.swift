@@ -16,6 +16,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case updateSettings(LinuxSettings)
     case updateHooks(HooksConfig)
     case openConfigFolder
+    case replaceTokenAccounts(providerID: String, data: ProviderTokenAccountData?)
+    case updateQuotaWarnings(providerID: String, config: QuotaWarningConfig?)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -25,6 +27,9 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case patch
         case settings
         case hooks
+        case providerID
+        case data
+        case config
     }
 
     public init(from decoder: any Decoder) throws {
@@ -55,6 +60,16 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .updateHooks(try container.decode(HooksConfig.self, forKey: .hooks))
         case "openConfigFolder":
             self = .openConfigFolder
+        // For these two an absent/null value means "clear the override",
+        // unlike ProviderConfigPatch where an omitted key means "unchanged".
+        case "replaceTokenAccounts":
+            self = .replaceTokenAccounts(
+                providerID: try container.decode(String.self, forKey: .providerID),
+                data: try container.decodeIfPresent(ProviderTokenAccountData.self, forKey: .data))
+        case "updateQuotaWarnings":
+            self = .updateQuotaWarnings(
+                providerID: try container.decode(String.self, forKey: .providerID),
+                config: try container.decodeIfPresent(QuotaWarningConfig.self, forKey: .config))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -95,6 +110,14 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode(hooks, forKey: .hooks)
         case .openConfigFolder:
             try container.encode("openConfigFolder", forKey: .type)
+        case let .replaceTokenAccounts(providerID, data):
+            try container.encode("replaceTokenAccounts", forKey: .type)
+            try container.encode(providerID, forKey: .providerID)
+            try container.encodeIfPresent(data, forKey: .data)
+        case let .updateQuotaWarnings(providerID, config):
+            try container.encode("updateQuotaWarnings", forKey: .type)
+            try container.encode(providerID, forKey: .providerID)
+            try container.encodeIfPresent(config, forKey: .config)
         }
     }
 }

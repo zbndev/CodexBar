@@ -1,4 +1,30 @@
+import CodexBarCore
 import Foundation
+
+// The Core token-account types are Codable/Sendable but not Equatable, while
+// every bridge envelope is. Compare each stored field so the round-trip tests
+// stay meaningful rather than trivially true.
+extension ProviderTokenAccount: @retroactive Equatable {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.id == rhs.id &&
+            lhs.label == rhs.label &&
+            lhs.token == rhs.token &&
+            lhs.addedAt == rhs.addedAt &&
+            lhs.lastUsed == rhs.lastUsed &&
+            lhs.externalIdentifier == rhs.externalIdentifier &&
+            lhs.usageScope == rhs.usageScope &&
+            lhs.organizationID == rhs.organizationID &&
+            lhs.workspaceID == rhs.workspaceID
+    }
+}
+
+extension ProviderTokenAccountData: @retroactive Equatable {
+    public static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.version == rhs.version &&
+            lhs.accounts == rhs.accounts &&
+            lhs.activeIndex == rhs.activeIndex
+    }
+}
 
 /// One option in a `.picker` row.
 public struct PaneOption: Codable, Equatable, Sendable {
@@ -159,9 +185,20 @@ public enum PaneRow: Codable, Equatable, Sendable {
 public struct ProviderPanePayload: Codable, Equatable, Sendable {
     public var id: String
     public var rows: [PaneRow]
+    /// Collection data the dynamic rows render. Carried alongside the rows
+    /// rather than inside them so the generic renderer stays unaware of it.
+    public var tokenAccounts: ProviderTokenAccountData?
+    public var quotaWarnings: QuotaWarningConfig?
 
-    public init(id: String, rows: [PaneRow]) {
+    public init(
+        id: String,
+        rows: [PaneRow],
+        tokenAccounts: ProviderTokenAccountData? = nil,
+        quotaWarnings: QuotaWarningConfig? = nil)
+    {
         self.id = id
         self.rows = rows
+        self.tokenAccounts = tokenAccounts
+        self.quotaWarnings = quotaWarnings
     }
 }

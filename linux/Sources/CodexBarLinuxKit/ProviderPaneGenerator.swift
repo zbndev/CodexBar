@@ -13,7 +13,9 @@ public enum ProviderPaneGenerator {
     {
         ProviderPanePayload(
             id: descriptor.id.rawValue,
-            rows: self.rows(for: descriptor, config: config))
+            rows: self.rows(for: descriptor, config: config),
+            tokenAccounts: config?.tokenAccounts,
+            quotaWarnings: config?.quotaWarnings)
     }
 
     public static func rows(

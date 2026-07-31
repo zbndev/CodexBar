@@ -86,7 +86,8 @@ app.onActivate = {
         case .openSettings:
             MainLoopDispatch.onMainLoop { presentSettings() }
         // Handled by the settings window's own bridge, never the popup's.
-        case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder:
+        case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
+             .replaceTokenAccounts, .updateQuotaWarnings:
             break
         case .quit:
             app.quit()

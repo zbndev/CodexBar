@@ -8,7 +8,11 @@ import Foundation
 public final class Bridge {
     private let webView: WebView
     private let handler: @Sendable (BridgeCommand) -> Void
-    private let encoder = JSONEncoder()
+    private let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
 
     /// Retained for the lifetime of the process; released when the bridge dies.
     private var selfBox: Unmanaged<BridgeBox>?

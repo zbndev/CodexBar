@@ -1,14 +1,5 @@
 import Foundation
 
-/// Placeholder payload. Task 5 replaces its contents with the real snapshot.
-public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
-    public var generatedAt: String
-
-    public init(generatedAt: String) {
-        self.generatedAt = generatedAt
-    }
-}
-
 /// Messages sent from the web UI to Swift.
 ///
 /// Encoded as `{"type": "<case>", ...}` so the JS side stays readable.

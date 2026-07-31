@@ -6,7 +6,11 @@ import Foundation
 /// The C types are spelled `_GtkWindow` / `_GtkApplication` — their struct tags —
 /// because the plain `GtkWindow` and `GtkApplication` typedef names are shadowed
 /// inside this module by the Swift classes of the same name.
-public final class GtkWindow {
+///
+/// `@unchecked Sendable` because the instance is confined to the GTK main-loop
+/// thread: callbacks that capture it (tray actions, refresh completions) only
+/// ever touch it from inside `MainLoopDispatch.onMainLoop`.
+public final class GtkWindow: @unchecked Sendable {
     public let pointer: OpaquePointer
 
     public init(application: GtkApplication, title: String, width: Int32, height: Int32) {

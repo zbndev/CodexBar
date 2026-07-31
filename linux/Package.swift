@@ -20,11 +20,17 @@ let package = Package(
             path: "Sources/CWebKitGTK",
             pkgConfig: "webkitgtk-6.0",
             providers: [.apt(["libwebkitgtk-6.0-dev"])]),
+        .systemLibrary(
+            name: "CAyatanaAppIndicator",
+            path: "Sources/CAyatanaAppIndicator",
+            pkgConfig: "ayatana-appindicator-glib",
+            providers: [.apt(["libayatana-appindicator3-dev"])]),
         .target(
             name: "CodexBarLinuxKit",
             dependencies: [
                 "CGtk4",
                 "CWebKitGTK",
+                "CAyatanaAppIndicator",
                 .product(name: "CodexBarCore", package: "CodexBar"),
             ],
             path: "Sources/CodexBarLinuxKit",

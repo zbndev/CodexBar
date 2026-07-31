@@ -6,7 +6,11 @@ import Foundation
 /// GTK is not thread-safe: every call in this type, and in `GtkWindow`,
 /// must happen on the thread that calls `run()`. Work coming off Swift
 /// concurrency hops back through `MainLoopDispatch`.
-public final class GtkApplication {
+///
+/// `@unchecked Sendable` for the same reason as `GtkWindow`: the instance is
+/// confined to the GTK main-loop thread, and callbacks reach it only through
+/// `MainLoopDispatch.onMainLoop`.
+public final class GtkApplication: @unchecked Sendable {
     public let pointer: OpaquePointer
 
     /// Called once GTK has finished starting up. Create windows here, not before.

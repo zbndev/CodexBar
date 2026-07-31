@@ -21,6 +21,10 @@ func openInBrowser(_ url: String) {
 }
 
 app.onActivate = {
+    // Must precede the first WebView: the scheme is registered on the default
+    // web context, and a view created earlier would have nothing to load from.
+    WebUIProtocol.register()
+
     let created = GtkWindow(application: app, title: "CodexBar", width: 420, height: 640)
     let view = WebView()
 

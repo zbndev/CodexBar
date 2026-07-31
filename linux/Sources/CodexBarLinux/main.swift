@@ -9,19 +9,51 @@ nonisolated(unsafe) var window: GtkWindow?
 nonisolated(unsafe) var webView: WebView?
 nonisolated(unsafe) var bridge: Bridge?
 nonisolated(unsafe) var tray: TrayIndicator?
+nonisolated(unsafe) var store: LinuxUsageStore?
+
+/// Opens a URL in the user's default browser. Used for dashboard and status
+/// links; the OAuth flows in M4 will reuse it.
+func openInBrowser(_ url: String) {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/xdg-open")
+    process.arguments = [url]
+    try? process.run()
+}
 
 app.onActivate = {
     let created = GtkWindow(application: app, title: "CodexBar", width: 420, height: 640)
     let view = WebView()
 
+    // Publishing goes through the main loop: snapshots arrive on background
+    // tasks, and WebKit may only be touched from the GTK thread.
+    let madeStore = LinuxUsageStore { payload in
+        MainLoopDispatch.onMainLoop {
+            bridge?.send(.snapshot(payload))
+        }
+    }
+
     let madeBridge = Bridge(webView: view) { command in
         switch command {
         case .ready:
-            FileHandle.standardError.write(Data("codexbar: web UI ready\n".utf8))
+            MainLoopDispatch.onMainLoop {
+                bridge?.send(.snapshot(madeStore.currentPayload()))
+            }
+            madeStore.refreshAll()
+        case let .refresh(provider):
+            MainLoopDispatch.onMainLoop {
+                bridge?.send(.refreshStarted(provider: provider))
+            }
+            if let provider {
+                madeStore.refresh(providerID: provider)
+            } else {
+                madeStore.refreshAll()
+            }
+        case let .openURL(url):
+            openInBrowser(url)
+        case .selectProvider:
+            break
         case .quit:
             app.quit()
-        case .refresh, .selectProvider, .openURL:
-            FileHandle.standardError.write(Data("codexbar: command \(command)\n".utf8))
         }
     }
 
@@ -37,17 +69,14 @@ app.onActivate = {
             if created.isVisible { created.hide() } else { created.present() }
         }
     }
-    madeTray.onRefresh = {
-        FileHandle.standardError.write(Data("codexbar: tray refresh\n".utf8))
-    }
-    madeTray.onQuit = {
-        MainLoopDispatch.onMainLoop { app.quit() }
-    }
+    madeTray.onRefresh = { madeStore.refreshAll() }
+    madeTray.onQuit = { MainLoopDispatch.onMainLoop { app.quit() } }
 
     window = created
     webView = view
     bridge = madeBridge
     tray = madeTray
+    store = madeStore
 }
 
 let status = app.run()

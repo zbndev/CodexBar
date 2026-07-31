@@ -15,13 +15,20 @@ let package = Package(
             path: "Sources/CGtk4",
             pkgConfig: "gtk4",
             providers: [.apt(["libgtk-4-dev"])]),
+        .systemLibrary(
+            name: "CWebKitGTK",
+            path: "Sources/CWebKitGTK",
+            pkgConfig: "webkitgtk-6.0",
+            providers: [.apt(["libwebkitgtk-6.0-dev"])]),
         .target(
             name: "CodexBarLinuxKit",
             dependencies: [
                 "CGtk4",
+                "CWebKitGTK",
                 .product(name: "CodexBarCore", package: "CodexBar"),
             ],
             path: "Sources/CodexBarLinuxKit",
+            resources: [.copy("../WebUI")],
             swiftSettings: [.enableUpcomingFeature("StrictConcurrency")]),
         .executableTarget(
             name: "CodexBarLinux",

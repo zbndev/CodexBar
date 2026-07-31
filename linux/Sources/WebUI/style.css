@@ -1,0 +1,26 @@
+:root {
+  color-scheme: light dark;
+  --bg: rgba(244, 244, 248, 0.92);
+  --fg: #1a1a1f;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: rgba(28, 28, 32, 0.92);
+    --fg: #f2f2f5;
+  }
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+.placeholder {
+  padding: 16px;
+  font-size: 17px;
+  font-weight: 600;
+}

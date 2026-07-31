@@ -1,0 +1,167 @@
+import Foundation
+
+/// One option in a `.picker` row.
+public struct PaneOption: Codable, Equatable, Sendable {
+    public var id: String
+    public var title: String
+
+    public init(id: String, title: String) {
+        self.id = id
+        self.title = title
+    }
+}
+
+/// A visibility rule: the row renders only when the current value of `key`
+/// equals `equals`. Reproduces the macOS panes' thin conditions (e.g. the
+/// cookie header shows only for `cookieSource == manual`) as data, so the
+/// renderer needs no per-provider logic.
+public struct RowCondition: Codable, Equatable, Sendable {
+    public var key: String
+    public var equals: String
+
+    public init(key: String, equals: String) {
+        self.key = key
+        self.equals = equals
+    }
+}
+
+/// Every row a settings pane can contain.
+///
+/// Both provider panes and the nine general panes are lists of these. The
+/// two editor rows (`tokenAccounts`, `quotaWarnings`) are placeholders for
+/// dynamic sections whose data arrives inside the payload; Task 7 wires
+/// their editing commands.
+public enum PaneRow: Codable, Equatable, Sendable {
+    case section(title: String)
+    case header(displayName: String, subtitle: String?, iconSVG: String?, accentColorHex: String)
+    case toggle(key: String, title: String, value: Bool)
+    case picker(key: String, title: String, options: [PaneOption], selected: String, visibleWhen: RowCondition?)
+    case field(key: String, title: String, value: String, secure: Bool, visibleWhen: RowCondition?)
+    case info(title: String, value: String)
+    case link(title: String, url: String)
+    case button(action: String, title: String)
+    case tokenAccounts(providerID: String)
+    case quotaWarnings(providerID: String)
+
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case title, subtitle, key, value, options, selected, secure, url, action
+        case displayName, iconSVG, accentColorHex, providerID, visibleWhen
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        switch try c.decode(String.self, forKey: .kind) {
+        case "section":
+            self = .section(title: try c.decode(String.self, forKey: .title))
+        case "header":
+            self = .header(
+                displayName: try c.decode(String.self, forKey: .displayName),
+                subtitle: try c.decodeIfPresent(String.self, forKey: .subtitle),
+                iconSVG: try c.decodeIfPresent(String.self, forKey: .iconSVG),
+                accentColorHex: try c.decode(String.self, forKey: .accentColorHex))
+        case "toggle":
+            self = .toggle(
+                key: try c.decode(String.self, forKey: .key),
+                title: try c.decode(String.self, forKey: .title),
+                value: try c.decode(Bool.self, forKey: .value))
+        case "picker":
+            self = .picker(
+                key: try c.decode(String.self, forKey: .key),
+                title: try c.decode(String.self, forKey: .title),
+                options: try c.decode([PaneOption].self, forKey: .options),
+                selected: try c.decode(String.self, forKey: .selected),
+                visibleWhen: try c.decodeIfPresent(RowCondition.self, forKey: .visibleWhen))
+        case "field":
+            self = .field(
+                key: try c.decode(String.self, forKey: .key),
+                title: try c.decode(String.self, forKey: .title),
+                value: try c.decode(String.self, forKey: .value),
+                secure: try c.decode(Bool.self, forKey: .secure),
+                visibleWhen: try c.decodeIfPresent(RowCondition.self, forKey: .visibleWhen))
+        case "info":
+            self = .info(
+                title: try c.decode(String.self, forKey: .title),
+                value: try c.decode(String.self, forKey: .value))
+        case "link":
+            self = .link(
+                title: try c.decode(String.self, forKey: .title),
+                url: try c.decode(String.self, forKey: .url))
+        case "button":
+            self = .button(
+                action: try c.decode(String.self, forKey: .action),
+                title: try c.decode(String.self, forKey: .title))
+        case "tokenAccounts":
+            self = .tokenAccounts(providerID: try c.decode(String.self, forKey: .providerID))
+        case "quotaWarnings":
+            self = .quotaWarnings(providerID: try c.decode(String.self, forKey: .providerID))
+        case let unknown:
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind, in: c,
+                debugDescription: "Unknown pane row kind: \(unknown)")
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .section(title):
+            try c.encode("section", forKey: .kind)
+            try c.encode(title, forKey: .title)
+        case let .header(displayName, subtitle, iconSVG, accentColorHex):
+            try c.encode("header", forKey: .kind)
+            try c.encode(displayName, forKey: .displayName)
+            try c.encodeIfPresent(subtitle, forKey: .subtitle)
+            try c.encodeIfPresent(iconSVG, forKey: .iconSVG)
+            try c.encode(accentColorHex, forKey: .accentColorHex)
+        case let .toggle(key, title, value):
+            try c.encode("toggle", forKey: .kind)
+            try c.encode(key, forKey: .key)
+            try c.encode(title, forKey: .title)
+            try c.encode(value, forKey: .value)
+        case let .picker(key, title, options, selected, visibleWhen):
+            try c.encode("picker", forKey: .kind)
+            try c.encode(key, forKey: .key)
+            try c.encode(title, forKey: .title)
+            try c.encode(options, forKey: .options)
+            try c.encode(selected, forKey: .selected)
+            try c.encodeIfPresent(visibleWhen, forKey: .visibleWhen)
+        case let .field(key, title, value, secure, visibleWhen):
+            try c.encode("field", forKey: .kind)
+            try c.encode(key, forKey: .key)
+            try c.encode(title, forKey: .title)
+            try c.encode(value, forKey: .value)
+            try c.encode(secure, forKey: .secure)
+            try c.encodeIfPresent(visibleWhen, forKey: .visibleWhen)
+        case let .info(title, value):
+            try c.encode("info", forKey: .kind)
+            try c.encode(title, forKey: .title)
+            try c.encode(value, forKey: .value)
+        case let .link(title, url):
+            try c.encode("link", forKey: .kind)
+            try c.encode(title, forKey: .title)
+            try c.encode(url, forKey: .url)
+        case let .button(action, title):
+            try c.encode("button", forKey: .kind)
+            try c.encode(action, forKey: .action)
+            try c.encode(title, forKey: .title)
+        case let .tokenAccounts(providerID):
+            try c.encode("tokenAccounts", forKey: .kind)
+            try c.encode(providerID, forKey: .providerID)
+        case let .quotaWarnings(providerID):
+            try c.encode("quotaWarnings", forKey: .kind)
+            try c.encode(providerID, forKey: .providerID)
+        }
+    }
+}
+
+/// A generated pane: the provider id plus its rows.
+public struct ProviderPanePayload: Codable, Equatable, Sendable {
+    public var id: String
+    public var rows: [PaneRow]
+
+    public init(id: String, rows: [PaneRow]) {
+        self.id = id
+        self.rows = rows
+    }
+}

@@ -102,3 +102,10 @@ private struct SampleError: Error {}
     #expect(view.windows.isEmpty)
     #expect(view.displayName == descriptor.metadata.displayName)
 }
+
+@Test func `brand icons resolve from the root package resources`() {
+    let descriptor = ProviderDescriptorRegistry.descriptor(for: .claude)
+    let svg = ProviderIcons.svg(named: descriptor.branding.iconResourceName)
+    #expect(svg != nil)
+    #expect(svg?.contains("<svg") == true)
+}

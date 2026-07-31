@@ -31,6 +31,7 @@ public enum ProviderCatalog {
             id: descriptor.id.rawValue,
             displayName: descriptor.metadata.displayName,
             iconResourceName: descriptor.branding.iconResourceName,
+            iconSVG: ProviderIcons.svg(named: descriptor.branding.iconResourceName),
             accentColorHex: descriptor.branding.color.hexString,
             enabled: enabled,
             isLoading: true,

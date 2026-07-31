@@ -45,6 +45,7 @@ public struct ProviderView: Codable, Equatable, Sendable {
     public var id: String
     public var displayName: String
     public var iconResourceName: String
+    public var iconSVG: String?
     public var accentColorHex: String
     public var enabled: Bool
     public var windows: [ProviderWindowView]
@@ -61,6 +62,7 @@ public struct ProviderView: Codable, Equatable, Sendable {
         id: String,
         displayName: String,
         iconResourceName: String,
+        iconSVG: String? = nil,
         accentColorHex: String,
         enabled: Bool,
         windows: [ProviderWindowView] = [],
@@ -76,6 +78,7 @@ public struct ProviderView: Codable, Equatable, Sendable {
         self.id = id
         self.displayName = displayName
         self.iconResourceName = iconResourceName
+        self.iconSVG = iconSVG
         self.accentColorHex = accentColorHex
         self.enabled = enabled
         self.windows = windows

@@ -2,12 +2,20 @@
   color-scheme: light dark;
   --bg: rgba(244, 244, 248, 0.92);
   --fg: #1a1a1f;
+  --fg-dim: rgba(26, 26, 31, 0.55);
+  --track: rgba(26, 26, 31, 0.12);
+  --divider: rgba(26, 26, 31, 0.10);
+  --selected: rgba(60, 90, 240, 0.14);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: rgba(28, 28, 32, 0.92);
+    --bg: rgba(28, 28, 32, 0.94);
     --fg: #f2f2f5;
+    --fg-dim: rgba(242, 242, 245, 0.55);
+    --track: rgba(242, 242, 245, 0.16);
+    --divider: rgba(242, 242, 245, 0.12);
+    --selected: rgba(120, 150, 255, 0.20);
   }
 }
 
@@ -16,11 +24,105 @@ html, body {
   height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font: 13px/1.4 system-ui, sans-serif;
+  font: 13px/1.45 system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
 }
 
-.placeholder {
-  padding: 16px;
-  font-size: 17px;
-  font-weight: 600;
+.provider-strip {
+  display: flex;
+  gap: 4px;
+  padding: 10px 10px 0;
+  overflow-x: auto;
 }
+
+.provider-tab {
+  flex: 0 0 auto;
+  width: 66px;
+  padding: 6px 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-dim);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-align: center;
+}
+
+.provider-tab.is-selected {
+  background: var(--selected);
+  color: var(--fg);
+}
+
+.provider-tab svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+  margin: 0 auto 3px;
+}
+
+.provider-tab .accent {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--accent, transparent);
+}
+
+.detail { padding: 14px 16px 4px; }
+
+.detail h1 { margin: 0; font-size: 21px; font-weight: 600; }
+
+.detail-meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--fg-dim);
+  margin: 2px 0 12px;
+}
+
+.window { margin: 0 0 14px; }
+.window h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+
+.bar {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent, #6e5aff);
+  transition: width 0.3s ease;
+}
+
+.window-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  color: var(--fg-dim);
+}
+
+.state { padding: 10px 0; color: var(--fg-dim); }
+.state.is-error { color: #d0453b; }
+
+.footer {
+  display: flex;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--divider);
+}
+
+.footer-button {
+  flex: 1;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--track);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.footer-button:hover { background: var(--selected); }

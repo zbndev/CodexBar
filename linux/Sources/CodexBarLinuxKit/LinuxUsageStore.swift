@@ -13,14 +13,19 @@ public final class LinuxUsageStore: @unchecked Sendable {
 
     private let refresher = UsageRefresher()
     private let onSnapshot: @Sendable (ProviderSnapshotPayload) -> Void
+    private let configStore: CodexBarConfigStore
 
-    public init(onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void) {
+    public init(
+        configStore: CodexBarConfigStore = CodexBarConfigStore(),
+        onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void)
+    {
+        self.configStore = configStore
         self.onSnapshot = onSnapshot
         self.seedPlaceholders()
     }
 
     private func loadConfig() -> CodexBarConfig? {
-        try? CodexBarConfigStore().load()
+        try? self.configStore.load()
     }
 
     private func seedPlaceholders() {
@@ -110,6 +115,39 @@ public final class LinuxUsageStore: @unchecked Sendable {
     public func stopPeriodicRefresh() {
         self.refreshTask?.cancel()
         self.refreshTask = nil
+    }
+
+    /// Re-arms the timer from the user's choice. `startPeriodicRefresh`
+    /// already stops the previous task, so no timer chain can accumulate.
+    public func applyRefreshInterval(_ interval: RefreshInterval) {
+        guard let seconds = interval.seconds else {
+            self.stopPeriodicRefresh()
+            return
+        }
+        self.startPeriodicRefresh(intervalSeconds: seconds)
+    }
+
+    /// Rebuilds membership/order from the latest shared config. Existing
+    /// views survive, newly enabled providers start as placeholders, and
+    /// disabled providers disappear before the next fetch.
+    public func reconcileProviders(refresh: Bool = true) {
+        let config = self.loadConfig()
+        let descriptors = ProviderCatalog.enabledProviders(config: config)
+        let enabledIDs = Set(descriptors.map { $0.id.rawValue })
+        self.lock.lock()
+        self.order = descriptors.map { $0.id.rawValue }
+        self.views = self.views.filter { enabledIDs.contains($0.key) }
+        for descriptor in descriptors where self.views[descriptor.id.rawValue] == nil {
+            self.views[descriptor.id.rawValue] = ProviderCatalog.placeholderView(
+                for: descriptor, enabled: true)
+        }
+        self.lock.unlock()
+        self.onSnapshot(self.currentPayload())
+        if refresh {
+            for descriptor in descriptors {
+                self.startRefresh(descriptor: descriptor, config: config)
+            }
+        }
     }
 
     /// The largest `usedPercent` across every window of every provider, for

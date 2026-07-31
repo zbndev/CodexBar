@@ -36,12 +36,18 @@ app.onActivate = {
     // tasks, and WebKit may only be touched from the GTK thread.
     let madeStore = LinuxUsageStore { payload in
         MainLoopDispatch.onMainLoop {
+            let settings = coordinator?.linuxSettings() ?? LinuxSettings()
             var renderedPayload = payload
-            renderedPayload.localization = LocalizationCatalog.load(
-                locale: coordinator?.linuxSettings().language)
+            renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
+            renderedPayload.display = DisplayPreferences(settings: settings)
             bridge?.send(.snapshot(renderedPayload))
-            if let highest = store?.highestUsedPercent() {
-                tray?.setLabel("\(Int(highest.rounded()))%")
+            switch settings.trayLabelStyle {
+            case .none:
+                tray?.setLabel("")
+            case .highestPercent:
+                if let highest = store?.highestUsedPercent() {
+                    tray?.setLabel("\(Int(highest.rounded()))%")
+                }
             }
         }
     }
@@ -49,7 +55,19 @@ app.onActivate = {
     let madeCoordinator = SettingsCoordinator(
         configStore: CodexBarConfigStore(),
         settingsStore: LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()),
-        onChange: { publishSettings() })
+        onChange: {
+            // Everything here touches GTK/WebKit or store state the main loop
+            // owns, so it must run there. The captured state is the top-level
+            // optionals, which are assigned before any save can fire.
+            MainLoopDispatch.onMainLoop {
+                guard let coordinator, let store else { return }
+                let settings = coordinator.linuxSettings()
+                store.applyRefreshInterval(settings.refreshInterval)
+                store.reconcileProviders()
+                if settings.trayLabelStyle == .none { tray?.setLabel("") }
+                publishSettings()
+            }
+        })
 
     // One presenter shared by the popup's footer button and the tray menu:
     // the window is built lazily and reused, so its bridge survives a close.
@@ -70,9 +88,10 @@ app.onActivate = {
         switch command {
         case .ready:
             MainLoopDispatch.onMainLoop {
+                let settings = madeCoordinator.linuxSettings()
                 var renderedPayload = madeStore.currentPayload()
-                renderedPayload.localization = LocalizationCatalog.load(
-                    locale: madeCoordinator.linuxSettings().language)
+                renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
+                renderedPayload.display = DisplayPreferences(settings: settings)
                 bridge?.send(.snapshot(renderedPayload))
             }
             madeStore.refreshAll()
@@ -109,7 +128,15 @@ app.onActivate = {
         title: "CodexBar")
     madeTray.onShow = {
         MainLoopDispatch.onMainLoop {
-            if created.isVisible { created.hide() } else { created.present() }
+            if created.isVisible {
+                created.hide()
+            } else {
+                created.present()
+                // Only on the opening half of the toggle.
+                if madeCoordinator.linuxSettings().refreshOnOpen {
+                    madeStore.refreshAll()
+                }
+            }
         }
     }
     madeTray.onRefresh = { madeStore.refreshAll() }
@@ -123,7 +150,7 @@ app.onActivate = {
     store = madeStore
     coordinator = madeCoordinator
 
-    madeStore.startPeriodicRefresh(intervalSeconds: 300)
+    madeStore.applyRefreshInterval(madeCoordinator.linuxSettings().refreshInterval)
 }
 
 let status = app.run()

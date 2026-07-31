@@ -100,14 +100,33 @@ public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
     /// The popup only ever receives snapshots, so the catalog has to ride
     /// along here — `SettingsPayload` reaches `settings.js` alone.
     public var localization: LocalizationPayload
+    public var display: DisplayPreferences
 
     public init(
         generatedAt: Date,
         providers: [ProviderView],
-        localization: LocalizationPayload = LocalizationCatalog.load(locale: nil))
+        localization: LocalizationPayload = LocalizationCatalog.load(locale: nil),
+        display: DisplayPreferences = DisplayPreferences(settings: LinuxSettings()))
     {
         self.generatedAt = generatedAt
         self.providers = providers
         self.localization = localization
+        self.display = display
+    }
+}
+
+/// The popup-facing subset of `LinuxSettings`. Sent with every snapshot so
+/// display changes take effect without a restart.
+public struct DisplayPreferences: Codable, Equatable, Sendable {
+    public var usageBarsShowUsed: Bool
+    public var resetTimesShowAbsolute: Bool
+    public var showCreditsAndExtraUsage: Bool
+    public var hidePersonalInfo: Bool
+
+    public init(settings: LinuxSettings) {
+        self.usageBarsShowUsed = settings.usageBarsShowUsed
+        self.resetTimesShowAbsolute = settings.resetTimesShowAbsolute
+        self.showCreditsAndExtraUsage = settings.showCreditsAndExtraUsage
+        self.hidePersonalInfo = settings.hidePersonalInfo
     }
 }

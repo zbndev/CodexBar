@@ -1,4 +1,4 @@
-const state = { providers: [], selectedID: null };
+const state = { providers: [], selectedID: null, display: null };
 
 const bridge = {
   send(command) {
@@ -15,6 +15,12 @@ const bridge = {
 const handlers = {
   snapshot(event) {
     setLocalization(event.payload.localization);
+    state.display = event.payload.display || {
+      usageBarsShowUsed: true,
+      resetTimesShowAbsolute: false,
+      showCreditsAndExtraUsage: true,
+      hidePersonalInfo: false,
+    };
     state.providers = event.payload.providers;
     if (!state.selectedID && state.providers.length > 0) {
       state.selectedID = state.providers[0].id;
@@ -45,9 +51,13 @@ function clampPercent(value) {
 }
 
 function formatReset(window) {
+  if (!window.resetsAt) return window.resetDescription || '';
+  const date = new Date(window.resetsAt);
+  if (state.display && state.display.resetTimesShowAbsolute) {
+    return `Resets ${date.toLocaleString()}`;
+  }
   if (window.resetDescription) return window.resetDescription;
-  if (!window.resetsAt) return '';
-  const remaining = new Date(window.resetsAt).getTime() - Date.now();
+  const remaining = date.getTime() - Date.now();
   if (remaining <= 0) return t('Resetting');
   const minutes = Math.floor(remaining / 60000);
   const days = Math.floor(minutes / 1440);
@@ -55,6 +65,13 @@ function formatReset(window) {
   if (days > 0) return `Resets in ${days}d ${hours}h`;
   if (hours > 0) return `Resets in ${hours}h ${minutes % 60}m`;
   return `Resets in ${minutes}m`;
+}
+
+/// Bars can show used or remaining; the strip gauge and the detail bars must
+/// never disagree, so both go through here.
+function displayedPercent(usedPercent) {
+  const showUsed = !state.display || state.display.usageBarsShowUsed;
+  return showUsed ? usedPercent : 100 - usedPercent;
 }
 
 function renderStrip() {
@@ -83,7 +100,7 @@ function renderStrip() {
     const usageFill = document.createElement('span');
     usageFill.className = 'usage-fill';
     const used = highestUsedPercent(provider);
-    usageFill.style.width = used === null ? '0%' : `${clampPercent(used)}%`;
+    usageFill.style.width = used === null ? '0%' : `${clampPercent(displayedPercent(used))}%`;
     usage.appendChild(usageFill);
     tab.appendChild(usage);
 
@@ -124,7 +141,7 @@ function renderDetail() {
       ? `Updated ${new Date(provider.updatedAt).toLocaleTimeString()}`
       : '';
   const right = document.createElement('span');
-  right.textContent = provider.plan || '';
+  right.textContent = (state.display && state.display.hidePersonalInfo) ? '' : (provider.plan || '');
   meta.append(left, right);
   detail.appendChild(meta);
 
@@ -164,14 +181,16 @@ function renderDetail() {
     bar.className = 'bar';
     const fill = document.createElement('div');
     fill.className = 'bar-fill';
-    fill.style.width = `${clampPercent(window.usedPercent)}%`;
+    fill.style.width = `${clampPercent(displayedPercent(window.usedPercent))}%`;
     bar.appendChild(fill);
     section.appendChild(bar);
 
     const meta = document.createElement('div');
     meta.className = 'window-meta';
     const used = document.createElement('span');
-    used.textContent = `${Math.round(window.usedPercent)}% used`;
+    const showUsed = !state.display || state.display.usageBarsShowUsed;
+    used.textContent =
+      `${Math.round(displayedPercent(window.usedPercent))}% ${showUsed ? t('used') : t('remaining')}`;
     const reset = document.createElement('span');
     reset.textContent = formatReset(window);
     meta.append(used, reset);

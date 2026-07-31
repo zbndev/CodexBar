@@ -111,3 +111,30 @@ import Testing
         BridgeCommand.self, from: JSONEncoder().encode(original))
     #expect(decoded == original)
 }
+
+@Test func `linux settings map onto popup display preferences`() {
+    var settings = LinuxSettings()
+    settings.usageBarsShowUsed = false
+    settings.resetTimesShowAbsolute = true
+    settings.showCreditsAndExtraUsage = false
+    settings.hidePersonalInfo = true
+    let display = DisplayPreferences(settings: settings)
+    #expect(!display.usageBarsShowUsed)
+    #expect(display.resetTimesShowAbsolute)
+    #expect(!display.showCreditsAndExtraUsage)
+    #expect(display.hidePersonalInfo)
+}
+
+@Test func `snapshot display preferences round-trip through JSON`() throws {
+    let original = ProviderSnapshotPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        providers: [],
+        display: DisplayPreferences(settings: LinuxSettings()))
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    #expect(try decoder.decode(
+        ProviderSnapshotPayload.self,
+        from: encoder.encode(original)) == original)
+}

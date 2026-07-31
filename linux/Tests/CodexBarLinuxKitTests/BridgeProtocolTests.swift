@@ -1,3 +1,4 @@
+import CodexBarCore
 import Foundation
 import Testing
 
@@ -40,4 +41,29 @@ import Testing
 @Test func `event JSON embedded in a script literal escapes quotes and backslashes`() {
     let escaped = BridgeScriptEncoding.javaScriptStringLiteral(#"{"a":"b\c"}"#)
     #expect(escaped == #""{\"a\":\"b\\c\"}""#)
+}
+
+@Test func `an update-provider-config command round-trips`() throws {
+    var patch = ProviderConfigPatch()
+    patch.enabled = true
+    patch.apiKey = "sk"
+    let original = BridgeCommand.updateProviderConfig(id: "claude", patch: patch)
+    let decoded = try JSONDecoder().decode(
+        BridgeCommand.self, from: JSONEncoder().encode(original))
+    #expect(decoded == original)
+}
+
+@Test func `a settings event round-trips`() throws {
+    let payload = SettingsPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        settings: LinuxSettings(),
+        providers: [],
+        hooks: HooksConfig())
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let decoded = try decoder.decode(
+        BridgeEvent.self, from: encoder.encode(BridgeEvent.settings(payload)))
+    #expect(decoded == .settings(payload))
 }

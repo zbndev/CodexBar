@@ -9,12 +9,18 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case selectProvider(id: String)
     case openURL(String)
     case quit
+    case openSettings
+    case settingsReady
+    case updateProviderConfig(id: String, patch: ProviderConfigPatch)
+    case updateSettings(LinuxSettings)
 
     private enum CodingKeys: String, CodingKey {
         case type
         case provider
         case id
         case url
+        case patch
+        case settings
     }
 
     public init(from decoder: any Decoder) throws {
@@ -31,6 +37,16 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .openURL(try container.decode(String.self, forKey: .url))
         case "quit":
             self = .quit
+        case "openSettings":
+            self = .openSettings
+        case "settingsReady":
+            self = .settingsReady
+        case "updateProviderConfig":
+            self = .updateProviderConfig(
+                id: try container.decode(String.self, forKey: .id),
+                patch: try container.decode(ProviderConfigPatch.self, forKey: .patch))
+        case "updateSettings":
+            self = .updateSettings(try container.decode(LinuxSettings.self, forKey: .settings))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -55,6 +71,17 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode(url, forKey: .url)
         case .quit:
             try container.encode("quit", forKey: .type)
+        case .openSettings:
+            try container.encode("openSettings", forKey: .type)
+        case .settingsReady:
+            try container.encode("settingsReady", forKey: .type)
+        case let .updateProviderConfig(id, patch):
+            try container.encode("updateProviderConfig", forKey: .type)
+            try container.encode(id, forKey: .id)
+            try container.encode(patch, forKey: .patch)
+        case let .updateSettings(settings):
+            try container.encode("updateSettings", forKey: .type)
+            try container.encode(settings, forKey: .settings)
         }
     }
 }
@@ -64,6 +91,7 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
     case snapshot(ProviderSnapshotPayload)
     case refreshStarted(provider: String?)
     case error(message: String)
+    case settings(SettingsPayload)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -82,6 +110,8 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
             self = .refreshStarted(provider: try container.decodeIfPresent(String.self, forKey: .provider))
         case "error":
             self = .error(message: try container.decode(String.self, forKey: .message))
+        case "settings":
+            self = .settings(try container.decode(SettingsPayload.self, forKey: .payload))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -102,6 +132,9 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
         case let .error(message):
             try container.encode("error", forKey: .type)
             try container.encode(message, forKey: .message)
+        case let .settings(payload):
+            try container.encode("settings", forKey: .type)
+            try container.encode(payload, forKey: .payload)
         }
     }
 }

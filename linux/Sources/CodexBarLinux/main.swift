@@ -59,6 +59,11 @@ app.onActivate = {
             openInBrowser(url)
         case .selectProvider:
             break
+        // Settings-window commands. Task 5 gives `.openSettings` real
+        // presentation behaviour; the other three are handled by the settings
+        // window's own bridge, never the popup's.
+        case .openSettings, .settingsReady, .updateProviderConfig, .updateSettings:
+            break
         case .quit:
             app.quit()
         }

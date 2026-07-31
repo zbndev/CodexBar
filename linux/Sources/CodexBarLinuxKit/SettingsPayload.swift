@@ -8,14 +8,17 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
     public var general: [GeneralPane]
     public var providers: [ProviderPanePayload]
     public var hooks: HooksConfig
+    public var localization: LocalizationPayload
 
     public init(
         generatedAt: Date,
         settings: LinuxSettings,
         general: [GeneralPane],
         providers: [ProviderPanePayload],
-        hooks: HooksConfig)
+        hooks: HooksConfig,
+        localization: LocalizationPayload)
     {
+        self.localization = localization
         self.generatedAt = generatedAt
         self.settings = settings
         self.general = general

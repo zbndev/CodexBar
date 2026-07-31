@@ -19,6 +19,7 @@ const bridge = {
 const handlers = {
   settings(event) {
     state.payload = event.payload;
+    setLocalization(event.payload.localization);
     render();
   },
   error(event) {
@@ -54,7 +55,7 @@ function renderSidebar() {
   providers.replaceChildren();
 
   for (const pane of state.payload.general || []) {
-    general.appendChild(sidebarItem(pane.id, pane.title, null));
+    general.appendChild(sidebarItem(pane.id, t(pane.title), null));
   }
   for (const provider of state.payload.providers) {
     const header = provider.rows.find((r) => r.kind === 'header');
@@ -93,7 +94,7 @@ function render() {
     pane.replaceChildren();
     const loading = document.createElement('p');
     loading.className = 'state';
-    loading.textContent = 'Loading…';
+    loading.textContent = t('linux.settings.loading');
     pane.appendChild(loading);
     return;
   }
@@ -120,7 +121,7 @@ function renderRows(container, rows, providerID) {
       case 'section': {
         const title = document.createElement('div');
         title.className = 'section-title';
-        title.textContent = row.title;
+        title.textContent = t(row.title);
         container.appendChild(title);
         break;
       }
@@ -140,7 +141,7 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'toggle': {
-        container.appendChild(labeledRow(row.title, () => {
+        container.appendChild(labeledRow(t(row.title), () => {
           const input = document.createElement('input');
           input.type = 'checkbox';
           input.checked = row.value;
@@ -152,12 +153,12 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'picker': {
-        container.appendChild(labeledRow(row.title, () => {
+        container.appendChild(labeledRow(t(row.title), () => {
           const select = document.createElement('select');
           for (const option of row.options) {
             const element = document.createElement('option');
             element.value = option.id;
-            element.textContent = option.title;
+            element.textContent = t(option.title);
             if (option.id === row.selected) element.selected = true;
             select.appendChild(element);
           }
@@ -169,7 +170,7 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'field': {
-        container.appendChild(labeledRow(row.title, () => {
+        container.appendChild(labeledRow(t(row.title), () => {
           const input = document.createElement('input');
           input.type = row.secure ? 'password' : 'text';
           input.value = row.value;
@@ -182,7 +183,7 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'info': {
-        const line = labeledRow(row.title, () => {
+        const line = labeledRow(t(row.title), () => {
           const value = document.createElement('span');
           value.textContent = row.value;
           return value;
@@ -191,10 +192,10 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'link': {
-        const line = labeledRow(row.title, () => {
+        const line = labeledRow(t(row.title), () => {
           const anchor = document.createElement('a');
           anchor.href = '#';
-          anchor.textContent = 'Open';
+          anchor.textContent = t('linux.settings.open');
           anchor.addEventListener('click', (click) => {
             click.preventDefault();
             bridge.send({ type: 'openURL', url: row.url });
@@ -205,7 +206,7 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'button': {
-        const line = labeledRow(row.title, () => {
+        const line = labeledRow(t(row.title), () => {
           const button = document.createElement('button');
           button.textContent = row.title === row.action ? 'Run' : row.action;
           button.addEventListener('click', () => handleAction(row.action));
@@ -261,7 +262,9 @@ function applyEdit(providerID, key, value) {
   // Two shapes don't survive a straight key write-back: booleans shown as
   // pickers arrive as "true"/"false" strings, and threshold lists arrive as
   // comma-separated text.
-  if (key === 'usageBarsShowUsed' || key === 'resetTimesShowAbsolute') {
+  if (key === 'language') {
+    state.payload.settings.language = value || null;
+  } else if (key === 'usageBarsShowUsed' || key === 'resetTimesShowAbsolute') {
     state.payload.settings[key] = value === 'true';
   } else if (key.endsWith('Thresholds')) {
     state.payload.settings[key] = String(value)
@@ -285,7 +288,7 @@ function handleAction(action) {
 function renderTokenAccounts(container, providerID) {
   const provider = state.payload.providers.find((p) => p.id === providerID);
   const data = provider.tokenAccounts || { version: 1, accounts: [], activeIndex: 0 };
-  container.appendChild(sectionTitle('Token accounts'));
+  container.appendChild(sectionTitle(t('linux.settings.tokenAccounts')));
 
   data.accounts.forEach((account, index) => {
     const line = document.createElement('div');
@@ -302,7 +305,7 @@ function renderTokenAccounts(container, providerID) {
     label.className = 'row-title';
     label.textContent = account.label;
     const remove = document.createElement('button');
-    remove.textContent = 'Remove';
+    remove.textContent = t('linux.settings.remove');
     remove.addEventListener('click', () => {
       data.accounts.splice(index, 1);
       data.activeIndex = Math.max(0, Math.min(data.activeIndex, data.accounts.length - 1));
@@ -321,7 +324,7 @@ function renderTokenAccounts(container, providerID) {
   const organizationInput = textInput('Organization ID (optional)');
   const workspaceInput = textInput('Workspace ID (optional)');
   const add = document.createElement('button');
-  add.textContent = 'Add';
+  add.textContent = t('linux.settings.add');
   add.addEventListener('click', () => {
     if (!labelInput.value.trim() || !tokenInput.value.trim()) return;
     data.accounts.push({
@@ -350,7 +353,7 @@ function replaceTokenAccounts(providerID, data) {
 function renderQuotaWarnings(container, providerID) {
   const provider = state.payload.providers.find((p) => p.id === providerID);
   const config = provider.quotaWarnings || {};
-  container.appendChild(sectionTitle('Quota warnings'));
+  container.appendChild(sectionTitle(t('linux.settings.quotaWarnings')));
   for (const windowName of ['session', 'weekly']) {
     const current = config[windowName] || { enabled: true, thresholds: [50, 20] };
     const enabled = document.createElement('input');
@@ -373,7 +376,7 @@ function renderQuotaWarnings(container, providerID) {
     container.appendChild(labeledRow(`${capitalize(windowName)} thresholds`, () => thresholds));
   }
   const clear = document.createElement('button');
-  clear.textContent = 'Use global defaults';
+  clear.textContent = t('linux.settings.useGlobal');
   clear.addEventListener('click', () => {
     bridge.send({ type: 'updateQuotaWarnings', providerID, config: null });
   });
@@ -382,7 +385,7 @@ function renderQuotaWarnings(container, providerID) {
 
 function renderHooks(container) {
   const hooks = state.payload.hooks || { enabled: false, events: [] };
-  container.appendChild(sectionTitle('Hook rules'));
+  container.appendChild(sectionTitle(t('linux.settings.hooks')));
   hooks.events.forEach((rule, index) => {
     const card = document.createElement('div');
     card.className = 'collection-card';

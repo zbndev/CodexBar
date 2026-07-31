@@ -14,6 +14,7 @@ const bridge = {
 
 const handlers = {
   snapshot(event) {
+    setLocalization(event.payload.localization);
     state.providers = event.payload.providers;
     if (!state.selectedID && state.providers.length > 0) {
       state.selectedID = state.providers[0].id;
@@ -47,7 +48,7 @@ function formatReset(window) {
   if (window.resetDescription) return window.resetDescription;
   if (!window.resetsAt) return '';
   const remaining = new Date(window.resetsAt).getTime() - Date.now();
-  if (remaining <= 0) return 'Resetting';
+  if (remaining <= 0) return t('Resetting');
   const minutes = Math.floor(remaining / 60000);
   const days = Math.floor(minutes / 1440);
   const hours = Math.floor((minutes % 1440) / 60);
@@ -103,7 +104,7 @@ function renderDetail() {
   if (!provider) {
     const empty = document.createElement('p');
     empty.className = 'state';
-    empty.textContent = 'No providers enabled.';
+    empty.textContent = t('No providers enabled.');
     detail.appendChild(empty);
     return;
   }
@@ -118,7 +119,7 @@ function renderDetail() {
   meta.className = 'detail-meta';
   const left = document.createElement('span');
   left.textContent = provider.isLoading
-    ? 'Updating…'
+    ? t('Updating…')
     : provider.updatedAt
       ? `Updated ${new Date(provider.updatedAt).toLocaleTimeString()}`
       : '';
@@ -138,7 +139,7 @@ function renderDetail() {
   if (provider.isLoading && provider.windows.length === 0) {
     const loading = document.createElement('p');
     loading.className = 'state';
-    loading.textContent = 'Loading…';
+    loading.textContent = t('linux.settings.loading');
     detail.appendChild(loading);
     return;
   }
@@ -146,7 +147,7 @@ function renderDetail() {
   if (provider.windows.length === 0) {
     const none = document.createElement('p');
     none.className = 'state';
-    none.textContent = 'No usage windows reported.';
+    none.textContent = t('No usage windows reported.');
     detail.appendChild(none);
     return;
   }
@@ -180,7 +181,14 @@ function renderDetail() {
   }
 }
 
+function renderFooter() {
+  document.getElementById('refresh').textContent = t('Refresh');
+  document.getElementById('settings').textContent = t('linux.settings.title');
+  document.getElementById('quit').textContent = t('Quit');
+}
+
 function render() {
+  renderFooter();
   renderStrip();
   renderDetail();
 }

@@ -95,7 +95,13 @@ public enum GeneralPaneCatalog {
 
     private static func generalPane(_ settings: LinuxSettings) -> GeneralPane {
         GeneralPane(id: "general", title: "General", rows: [
-            .info(title: "Language", value: settings.language ?? "System"),
+            .picker(
+                key: "language",
+                title: "Language",
+                options: [PaneOption(id: "", title: "System language")] +
+                    LocalizationCatalog.supportedLocales.map { PaneOption(id: $0, title: $0) },
+                selected: settings.language ?? "",
+                visibleWhen: nil),
             .picker(
                 key: "refreshInterval",
                 title: "Refresh interval",

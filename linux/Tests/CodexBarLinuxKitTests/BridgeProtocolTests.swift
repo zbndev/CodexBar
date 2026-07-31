@@ -59,7 +59,8 @@ import Testing
         settings: LinuxSettings(),
         general: [],
         providers: [],
-        hooks: HooksConfig())
+        hooks: HooksConfig(),
+        localization: LocalizationCatalog.load(locale: "en"))
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
     let decoder = JSONDecoder()

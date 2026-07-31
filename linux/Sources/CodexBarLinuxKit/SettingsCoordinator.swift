@@ -45,7 +45,8 @@ public final class SettingsCoordinator: @unchecked Sendable {
             settings: settings,
             general: GeneralPaneCatalog.panes(settings: settings, hooks: hooks),
             providers: panes,
-            hooks: hooks)
+            hooks: hooks,
+            localization: LocalizationCatalog.load(locale: settings.language))
     }
 
     public func applyProviderPatch(id: String, patch: ProviderConfigPatch) throws {

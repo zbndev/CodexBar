@@ -97,9 +97,17 @@ public struct ProviderView: Codable, Equatable, Sendable {
 public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
     public var generatedAt: Date
     public var providers: [ProviderView]
+    /// The popup only ever receives snapshots, so the catalog has to ride
+    /// along here — `SettingsPayload` reaches `settings.js` alone.
+    public var localization: LocalizationPayload
 
-    public init(generatedAt: Date, providers: [ProviderView]) {
+    public init(
+        generatedAt: Date,
+        providers: [ProviderView],
+        localization: LocalizationPayload = LocalizationCatalog.load(locale: nil))
+    {
         self.generatedAt = generatedAt
         self.providers = providers
+        self.localization = localization
     }
 }

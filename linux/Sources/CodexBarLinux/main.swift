@@ -36,7 +36,10 @@ app.onActivate = {
     // tasks, and WebKit may only be touched from the GTK thread.
     let madeStore = LinuxUsageStore { payload in
         MainLoopDispatch.onMainLoop {
-            bridge?.send(.snapshot(payload))
+            var renderedPayload = payload
+            renderedPayload.localization = LocalizationCatalog.load(
+                locale: coordinator?.linuxSettings().language)
+            bridge?.send(.snapshot(renderedPayload))
             if let highest = store?.highestUsedPercent() {
                 tray?.setLabel("\(Int(highest.rounded()))%")
             }
@@ -67,7 +70,10 @@ app.onActivate = {
         switch command {
         case .ready:
             MainLoopDispatch.onMainLoop {
-                bridge?.send(.snapshot(madeStore.currentPayload()))
+                var renderedPayload = madeStore.currentPayload()
+                renderedPayload.localization = LocalizationCatalog.load(
+                    locale: madeCoordinator.linuxSettings().language)
+                bridge?.send(.snapshot(renderedPayload))
             }
             madeStore.refreshAll()
         case let .refresh(provider):

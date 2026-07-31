@@ -189,6 +189,9 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refresh').addEventListener('click', () => {
     bridge.send({ type: 'refresh', provider: null });
   });
+  document.getElementById('settings').addEventListener('click', () => {
+    bridge.send({ type: 'openSettings' });
+  });
   document.getElementById('quit').addEventListener('click', () => {
     bridge.send({ type: 'quit' });
   });

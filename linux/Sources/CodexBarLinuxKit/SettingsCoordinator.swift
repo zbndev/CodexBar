@@ -63,4 +63,19 @@ public final class SettingsCoordinator: @unchecked Sendable {
         try self.settingsStore.save(settings)
         self.onChange()
     }
+
+    /// Re-sends the full payload to whoever is listening. Called after
+    /// every apply (through `onChange` in main.swift) and on
+    /// `settingsReady`.
+    public func republish() {
+        self.onChange()
+    }
+
+    /// Surfaces a save failure to the web UI. The closure is wired to the
+    /// bridge by `SettingsWindow`.
+    public func reportError(_ message: String) {
+        self.onError?(message)
+    }
+
+    public var onError: (@Sendable (String) -> Void)?
 }

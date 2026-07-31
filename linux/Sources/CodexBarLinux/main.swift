@@ -1,3 +1,4 @@
+import CodexBarCore
 import CodexBarLinuxKit
 import Foundation
 
@@ -10,14 +11,17 @@ nonisolated(unsafe) var webView: WebView?
 nonisolated(unsafe) var bridge: Bridge?
 nonisolated(unsafe) var tray: TrayIndicator?
 nonisolated(unsafe) var store: LinuxUsageStore?
+nonisolated(unsafe) var settingsWindow: SettingsWindow?
+nonisolated(unsafe) var coordinator: SettingsCoordinator?
+nonisolated(unsafe) var settingsEventSink: (@Sendable (SettingsPayload) -> Void)?
 
-/// Opens a URL in the user's default browser. Used for dashboard and status
-/// links; the OAuth flows in M4 will reuse it.
-func openInBrowser(_ url: String) {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/xdg-open")
-    process.arguments = [url]
-    try? process.run()
+/// Rebuilds the settings payload and pushes it to the settings window, if one
+/// is open. Runs on the main loop because it ends in a WebKit call.
+func publishSettings() {
+    MainLoopDispatch.onMainLoop {
+        guard let coordinator else { return }
+        settingsEventSink?(coordinator.payload())
+    }
 }
 
 app.onActivate = {
@@ -39,6 +43,26 @@ app.onActivate = {
         }
     }
 
+    let madeCoordinator = SettingsCoordinator(
+        configStore: CodexBarConfigStore(),
+        settingsStore: LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()),
+        onChange: { publishSettings() })
+
+    // One presenter shared by the popup's footer button and the tray menu:
+    // the window is built lazily and reused, so its bridge survives a close.
+    let presentSettings: @Sendable () -> Void = {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow(
+                application: app,
+                coordinator: madeCoordinator,
+                registerSink: { settingsEventSink = $0 },
+                onRefresh: { madeStore.refreshAll() },
+                onQuit: { MainLoopDispatch.onMainLoop { app.quit() } })
+        }
+        settingsWindow?.present()
+        madeCoordinator.republish()
+    }
+
     let madeBridge = Bridge(webView: view) { command in
         switch command {
         case .ready:
@@ -56,13 +80,13 @@ app.onActivate = {
                 madeStore.refreshAll()
             }
         case let .openURL(url):
-            openInBrowser(url)
+            SystemBrowser.open(url)
         case .selectProvider:
             break
-        // Settings-window commands. Task 5 gives `.openSettings` real
-        // presentation behaviour; the other three are handled by the settings
-        // window's own bridge, never the popup's.
-        case .openSettings, .settingsReady, .updateProviderConfig, .updateSettings:
+        case .openSettings:
+            MainLoopDispatch.onMainLoop { presentSettings() }
+        // Handled by the settings window's own bridge, never the popup's.
+        case .settingsReady, .updateProviderConfig, .updateSettings:
             break
         case .quit:
             app.quit()
@@ -82,6 +106,7 @@ app.onActivate = {
         }
     }
     madeTray.onRefresh = { madeStore.refreshAll() }
+    madeTray.onSettings = { MainLoopDispatch.onMainLoop { presentSettings() } }
     madeTray.onQuit = { MainLoopDispatch.onMainLoop { app.quit() } }
 
     window = created
@@ -89,6 +114,7 @@ app.onActivate = {
     bridge = madeBridge
     tray = madeTray
     store = madeStore
+    coordinator = madeCoordinator
 
     madeStore.startPeriodicRefresh(intervalSeconds: 300)
 }

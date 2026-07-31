@@ -12,6 +12,7 @@ public final class TrayIndicator {
 
     public var onShow: (@Sendable () -> Void)?
     public var onRefresh: (@Sendable () -> Void)?
+    public var onSettings: (@Sendable () -> Void)?
     public var onQuit: (@Sendable () -> Void)?
 
     public init(id: String, iconName: String, title: String) {
@@ -35,6 +36,7 @@ public final class TrayIndicator {
     private func installActions() {
         self.addAction(named: "show") { [weak self] in self?.onShow?() }
         self.addAction(named: "refresh") { [weak self] in self?.onRefresh?() }
+        self.addAction(named: "settings") { [weak self] in self?.onSettings?() }
         self.addAction(named: "quit") { [weak self] in self?.onQuit?() }
         app_indicator_set_actions(
             UnsafeMutablePointer<AppIndicator>(self.indicator),
@@ -78,6 +80,7 @@ public final class TrayIndicator {
         }
         g_menu_append(menu, "Open CodexBar", "show")
         g_menu_append(menu, "Refresh", "refresh")
+        g_menu_append(menu, "Settings", "settings")
         g_menu_append(menu, "Quit", "quit")
         app_indicator_set_menu(UnsafeMutablePointer<AppIndicator>(self.indicator), menu)
     }

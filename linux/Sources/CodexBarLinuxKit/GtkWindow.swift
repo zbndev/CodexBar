@@ -36,6 +36,15 @@ public final class GtkWindow: @unchecked Sendable {
         gtk_widget_get_visible(UnsafeMutablePointer<_GtkWidget>(self.pointer)) != 0
     }
 
+    /// Keeps the native window alive when the title-bar close button is
+    /// pressed, so the wrapper (and its web view and bridge) can be presented
+    /// again instead of being destroyed.
+    public func setHideOnClose(_ enabled: Bool) {
+        gtk_window_set_hide_on_close(
+            UnsafeMutablePointer<_GtkWindow>(self.pointer),
+            enabled ? 1 : 0)
+    }
+
     /// Replaces the window's content with `child`.
     public func setChild(_ child: OpaquePointer) {
         gtk_window_set_child(

@@ -11,7 +11,7 @@ import Foundation
 public final class SettingsWindow: @unchecked Sendable {
     private let window: GtkWindow
     private let webView: WebView
-    private let bridge: Bridge
+    private var bridge: Bridge!
     private let coordinator: SettingsCoordinator
 
     public init(
@@ -21,6 +21,7 @@ public final class SettingsWindow: @unchecked Sendable {
         registerSink: (@escaping @Sendable (SettingsPayload) -> Void) -> Void,
         onRefresh: @escaping @Sendable () -> Void,
         onRefreshCost: @escaping @Sendable (String) -> Void,
+        onTestHook: @escaping @Sendable (HookEventType, String) async -> [HookTestRuleSummary],
         onQuit: @escaping @Sendable () -> Void)
     {
         self.coordinator = coordinator
@@ -119,6 +120,13 @@ public final class SettingsWindow: @unchecked Sendable {
                 Task { await coordinator.switchClaudeSwapAccount(number: number) }
             case let .refreshCost(providerID):
                 onRefreshCost(providerID)
+            case let .testHook(event, providerID):
+                Task {
+                    let results = await onTestHook(event, providerID)
+                    MainLoopDispatch.onMainLoop { [weak self] in
+                        self?.bridge.send(.hookTest(HookTestPayload(results: results)))
+                    }
+                }
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

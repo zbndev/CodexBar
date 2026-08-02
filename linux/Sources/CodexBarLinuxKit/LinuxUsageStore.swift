@@ -21,7 +21,10 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private let fetch: ProviderFetch
     private let onSnapshot: @Sendable (ProviderSnapshotPayload) -> Void
     private let onRefreshRecord: @Sendable (ProviderRefreshRecord) -> Void
+    private let onUsageTransitions: @Sendable (ProviderRefreshRecord, [UsageTransition]) -> Void
     private let configStore: CodexBarConfigStore
+    private let transitionEngine: UsageTransitionEngine
+    private let hookDispatcher: LinuxHookDispatcher
     private let kiloOrganizations: KiloOrganizationsState
     private let onKiloOrganizationsChange: @Sendable () -> Void
     private let historyStore: LinuxPlanHistoryStore?
@@ -42,6 +45,9 @@ public final class LinuxUsageStore: @unchecked Sendable {
                 settings: settings)
         },
         onRefreshRecord: @escaping @Sendable (ProviderRefreshRecord) -> Void = { _ in },
+        onUsageTransitions: @escaping @Sendable (ProviderRefreshRecord, [UsageTransition]) -> Void = { _, _ in },
+        transitionEngine: UsageTransitionEngine = UsageTransitionEngine(),
+        hookDispatcher: LinuxHookDispatcher? = nil,
         onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void)
     {
         self.configStore = configStore
@@ -51,6 +57,11 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.costStore = costStore
         self.fetch = fetch
         self.onRefreshRecord = onRefreshRecord
+        self.onUsageTransitions = onUsageTransitions
+        self.transitionEngine = transitionEngine
+        self.hookDispatcher = hookDispatcher ?? LinuxHookDispatcher(hooksConfig: {
+            (try? configStore.load())?.hooks ?? HooksConfig()
+        })
         self.onSnapshot = onSnapshot
         self.seedPlaceholders()
     }
@@ -115,11 +126,19 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.lock.lock()
         self.views[record.view.id] = record.view
         self.records[record.view.id] = record
+        let transitions = self.transitionEngine.transitions(for: record)
         self.lock.unlock()
         self.onSnapshot(self.currentPayload())
         self.recordHistory(record)
         self.refreshCost(record)
         self.onRefreshRecord(record)
+        self.onUsageTransitions(record, transitions)
+        guard !transitions.isEmpty else { return }
+        let dispatcher = self.hookDispatcher
+        let providerID = record.view.id
+        Task.detached {
+            await dispatcher.dispatch(transitions: transitions, provider: providerID)
+        }
     }
 
     /// Refreshes every enabled provider concurrently, publishing each card as
@@ -137,6 +156,10 @@ public final class LinuxUsageStore: @unchecked Sendable {
         let config = self.loadConfig()
         let descriptor = ProviderDescriptorRegistry.descriptor(for: provider)
         self.startRefresh(descriptor: descriptor, config: config)
+    }
+
+    public func testHook(event: HookEventType, provider: String) async -> [HookTestRuleSummary] {
+        await self.hookDispatcher.testHook(event: event, provider: provider)
     }
 
     private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) {
@@ -359,6 +382,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.order = descriptors.map { $0.id.rawValue }
         self.views = self.views.filter { enabledIDs.contains($0.key) }
         self.records = self.records.filter { enabledIDs.contains($0.key) }
+        self.transitionEngine.retainState(forProviderIDs: enabledIDs)
         for descriptor in descriptors where self.views[descriptor.id.rawValue] == nil {
             self.views[descriptor.id.rawValue] = ProviderCatalog.placeholderView(
                 for: descriptor, enabled: true)

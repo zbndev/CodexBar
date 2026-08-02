@@ -374,6 +374,18 @@ private func fixtureProviderWithCostAndHistory() -> ProviderView {
     #expect(decoded == .refreshCost(provider: "claude"))
 }
 
+@Test func `a test-hook command and summary payload round-trip through JSON`() throws {
+    let command = BridgeCommand.testHook(event: .quotaReached, provider: "claude")
+    #expect(try JSONDecoder().decode(
+        BridgeCommand.self,
+        from: JSONEncoder().encode(command)) == command)
+
+    let payload = HookTestPayload(results: [HookTestRuleSummary(ruleID: "fixture-rule", success: true)])
+    #expect(try JSONDecoder().decode(
+        BridgeEvent.self,
+        from: JSONEncoder().encode(BridgeEvent.hookTest(payload))) == .hookTest(payload))
+}
+
 @Test func `a snapshot carrying cost and utilization history round-trips through JSON`() throws {
     let payload = ProviderSnapshotPayload(
         generatedAt: Date(timeIntervalSince1970: 0),

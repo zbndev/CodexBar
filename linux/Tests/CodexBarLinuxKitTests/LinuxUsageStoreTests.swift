@@ -54,6 +54,39 @@ private actor CostScanRecorder {
     }
 }
 
+private actor UsageTransitionRecorder {
+    private var transitions: [[UsageTransition]] = []
+    private var waiter: CheckedContinuation<[UsageTransition], Never>?
+
+    func append(_ transitions: [UsageTransition]) {
+        if let waiter {
+            self.waiter = nil
+            waiter.resume(returning: transitions)
+        } else {
+            self.transitions.append(transitions)
+        }
+    }
+
+    func next() async -> [UsageTransition] {
+        if !self.transitions.isEmpty { return self.transitions.removeFirst() }
+        return await withCheckedContinuation { continuation in
+            self.waiter = continuation
+        }
+    }
+}
+
+private actor UsageOutcomeSequence {
+    private var outcomes: [ProviderFetchOutcome]
+
+    init(_ outcomes: [ProviderFetchOutcome]) {
+        self.outcomes = outcomes
+    }
+
+    func next() -> ProviderFetchOutcome {
+        self.outcomes.removeFirst()
+    }
+}
+
 @Test func `reconcile adds enabled providers and removes disabled providers`() throws {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -166,4 +199,50 @@ private actor CostScanRecorder {
     #expect(request.provider == .codex)
     #expect(request.historyDays == 30)
     #expect(!request.forceRefresh)
+}
+
+@Test func `refresh records flow through the shared transition engine`() async throws {
+    // Given
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let configStore = CodexBarConfigStore(fileURL: directory.appendingPathComponent("config.json"))
+    try configStore.save(CodexBarConfig(providers: [ProviderConfig(id: .claude, enabled: true)]))
+    let outcomes = UsageOutcomeSequence([
+        transitionOutcome(remainingPercent: 21),
+        transitionOutcome(remainingPercent: 19),
+    ])
+    let transitions = UsageTransitionRecorder()
+    let store = LinuxUsageStore(
+        configStore: configStore,
+        fetch: { _, _, _, _ in await outcomes.next() },
+        onUsageTransitions: { _, values in Task { await transitions.append(values) } },
+        onSnapshot: { _ in })
+
+    // When
+    store.refresh(providerID: "claude")
+    _ = await transitions.next()
+    store.refresh(providerID: "claude")
+    let values = await transitions.next()
+
+    // Then
+    #expect(values == [.quotaLow(windowID: "primary", threshold: 20, remainingPercent: 19)])
+}
+
+private func transitionOutcome(remainingPercent: Double) -> ProviderFetchOutcome {
+    let usage = UsageSnapshot(
+        primary: RateWindow(
+            usedPercent: 100 - remainingPercent,
+            windowMinutes: 300,
+            resetsAt: nil,
+            resetDescription: nil),
+        secondary: nil,
+        updatedAt: Date(timeIntervalSince1970: 1))
+    return ProviderFetchOutcome(
+        result: .success(ProviderFetchResult(
+            usage: usage,
+            credits: nil,
+            dashboard: nil,
+            sourceLabel: "Fixture",
+            strategyID: "fixture",
+            strategyKind: .localProbe)),
+        attempts: [])
 }

@@ -111,6 +111,7 @@ app.onActivate = {
                 registerSink: { settingsEventSink = $0 },
                 onRefresh: { madeStore.refreshAll() },
                 onRefreshCost: refreshCost,
+                onTestHook: { event, providerID in await madeStore.testHook(event: event, provider: providerID) },
                 onQuit: { MainLoopDispatch.onMainLoop { app.quit() } })
         }
         settingsWindow?.present()
@@ -151,7 +152,7 @@ app.onActivate = {
                .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
                .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
                .selectManagedCodexAccount, .refreshKiloOrganizations, .setKiloOrganizationEnabled,
-               .refreshClaudeSwap, .switchClaudeSwapAccount:
+               .refreshClaudeSwap, .switchClaudeSwapAccount, .testHook:
             break
         case .quit:
             app.quit()

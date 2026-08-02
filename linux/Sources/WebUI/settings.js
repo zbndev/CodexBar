@@ -3,6 +3,7 @@ const state = {
   selectedPane: 'general', // general pane id or 'provider:<id>'
   fieldValues: {},      // providerID -> { rowKey: currentValue } for visibleWhen
   loginProgress: {},    // providerID -> last LoginPhasePayload
+  hookTestResults: {},
 };
 
 const bridge = {
@@ -28,6 +29,11 @@ const handlers = {
   },
   loginProgress(event) {
     state.loginProgress[event.provider] = event.payload;
+    render();
+  },
+  hookTest(event) {
+    state.hookTestResults = Object.fromEntries(
+      event.payload.results.map((result) => [result.ruleID, result.success]));
     render();
   },
   snapshot() {}, refreshStarted() {},
@@ -714,7 +720,21 @@ function renderHooks(container) {
       hooks.events.splice(index, 1);
       saveHooks(hooks);
     });
-    card.appendChild(actionRow(remove));
+    const test = pushButton('Test');
+    test.disabled = !rule.provider;
+    test.addEventListener('click', () => {
+      state.hookTestResults = {};
+      bridge.send({ type: 'testHook', event: rule.event, provider: rule.provider });
+    });
+    const testResult = state.hookTestResults[rule.id];
+    if (testResult !== undefined) {
+      card.appendChild(labeledRow('Test', () => {
+        const result = document.createElement('span');
+        result.textContent = testResult ? 'Succeeded' : 'Failed';
+        return result;
+      }));
+    }
+    card.appendChild(actionRow(test, remove));
     container.appendChild(card);
   });
   const add = pushButton('Add rule');

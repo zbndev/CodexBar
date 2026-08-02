@@ -29,6 +29,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case refreshClaudeSwap
     case switchClaudeSwapAccount(number: Int)
     case refreshCost(provider: String)
+    case testHook(event: HookEventType, provider: String)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -43,6 +44,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case config
         case enabled
         case number
+        case event
     }
 
     public init(from decoder: any Decoder) throws {
@@ -107,6 +109,10 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .switchClaudeSwapAccount(number: try container.decode(Int.self, forKey: .number))
         case "refreshCost":
             self = .refreshCost(provider: try container.decode(String.self, forKey: .provider))
+        case "testHook":
+            self = .testHook(
+                event: try container.decode(HookEventType.self, forKey: .event),
+                provider: try container.decode(String.self, forKey: .provider))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -186,6 +192,10 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case let .refreshCost(provider):
             try container.encode("refreshCost", forKey: .type)
             try container.encode(provider, forKey: .provider)
+        case let .testHook(event, provider):
+            try container.encode("testHook", forKey: .type)
+            try container.encode(event, forKey: .event)
+            try container.encode(provider, forKey: .provider)
         }
     }
 }
@@ -197,6 +207,7 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
     case error(message: String)
     case settings(SettingsPayload)
     case loginProgress(provider: String, phase: LoginPhasePayload)
+    case hookTest(HookTestPayload)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -221,6 +232,8 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
             self = .loginProgress(
                 provider: try container.decode(String.self, forKey: .provider),
                 phase: try container.decode(LoginPhasePayload.self, forKey: .payload))
+        case "hookTest":
+            self = .hookTest(try container.decode(HookTestPayload.self, forKey: .payload))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -248,7 +261,18 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
             try container.encode("loginProgress", forKey: .type)
             try container.encode(provider, forKey: .provider)
             try container.encode(phase, forKey: .payload)
+        case let .hookTest(payload):
+            try container.encode("hookTest", forKey: .type)
+            try container.encode(payload, forKey: .payload)
         }
+    }
+}
+
+public struct HookTestPayload: Codable, Equatable, Sendable {
+    public let results: [HookTestRuleSummary]
+
+    public init(results: [HookTestRuleSummary]) {
+        self.results = results
     }
 }
 

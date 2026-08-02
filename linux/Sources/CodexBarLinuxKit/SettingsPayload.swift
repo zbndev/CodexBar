@@ -9,6 +9,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
     public var providers: [ProviderPanePayload]
     public var managedCodexAccounts: [ManagedCodexAccountView]
     public var kiloOrganizations: KiloOrganizationsPayload
+    public var claudeSwap: ClaudeSwapPayload
     public var hooks: HooksConfig
     public var localization: LocalizationPayload
 
@@ -19,6 +20,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         providers: [ProviderPanePayload],
         managedCodexAccounts: [ManagedCodexAccountView] = [],
         kiloOrganizations: KiloOrganizationsPayload = KiloOrganizationsPayload(),
+        claudeSwap: ClaudeSwapPayload = ClaudeSwapPayload(executablePath: nil, accounts: [], errorMessage: nil),
         hooks: HooksConfig,
         localization: LocalizationPayload)
     {
@@ -29,6 +31,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         self.providers = providers
         self.managedCodexAccounts = managedCodexAccounts
         self.kiloOrganizations = kiloOrganizations
+        self.claudeSwap = claudeSwap
         self.hooks = hooks
     }
 }

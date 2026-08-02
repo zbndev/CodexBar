@@ -112,6 +112,10 @@ public final class SettingsWindow: @unchecked Sendable {
                 } catch {
                     coordinator.reportError("Could not save Kilo organization settings.")
                 }
+            case .refreshClaudeSwap:
+                Task { await coordinator.refreshClaudeSwap() }
+            case let .switchClaudeSwapAccount(number):
+                Task { await coordinator.switchClaudeSwapAccount(number: number) }
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

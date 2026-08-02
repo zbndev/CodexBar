@@ -21,6 +21,9 @@ public struct ProviderConfigPatch: Codable, Equatable, Sendable {
     public var awsProfile: String?
     public var awsAuthMode: String?
     public var antigravityPrioritizeExhaustedQuotas: Bool?
+    public var claudeSwapEnabled: Bool?
+    public var claudeSwapShowSingleAccount: Bool?
+    public var claudeSwapExecutablePath: String?
     public var deepseekProfileID: String?
     public var deepseekProfileScope: String?
     public init() {}
@@ -44,6 +47,11 @@ public struct ProviderConfigPatch: Codable, Equatable, Sendable {
         if let value = self.awsAuthMode { result.awsAuthMode = value.isEmpty ? nil : value }
         if let value = self.antigravityPrioritizeExhaustedQuotas {
             result.antigravityPrioritizeExhaustedQuotas = value
+        }
+        if let value = self.claudeSwapEnabled { result.claudeSwapEnabled = value }
+        if let value = self.claudeSwapShowSingleAccount { result.claudeSwapShowSingleAccount = value }
+        if let value = self.claudeSwapExecutablePath {
+            result.claudeSwapExecutablePath = value.isEmpty ? nil : value
         }
         if let value = self.deepseekProfileID { result.deepseekProfileID = value.isEmpty ? nil : value }
         if let value = self.deepseekProfileScope { result.deepseekProfileScope = value.isEmpty ? nil : value }

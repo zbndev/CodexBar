@@ -16,12 +16,16 @@ public final class SettingsCoordinator: @unchecked Sendable {
     private let settingsStore: LinuxSettingsStore
     private let onChange: @Sendable () -> Void
     private let kiloOrganizationFetch: @Sendable (String, [String: String]) async throws -> [KiloOrganization]
+    private let claudeSwapCoordinator: ClaudeSwapCoordinator
     public let kiloOrganizations: KiloOrganizationsState
+    public let claudeSwap: ClaudeSwapState
 
     public init(
         configStore: CodexBarConfigStore,
         settingsStore: LinuxSettingsStore,
         kiloOrganizations: KiloOrganizationsState? = nil,
+        claudeSwap: ClaudeSwapState? = nil,
+        claudeSwapCoordinator: ClaudeSwapCoordinator = ClaudeSwapCoordinator(),
         kiloOrganizationFetch: @escaping @Sendable (String, [String: String]) async throws -> [KiloOrganization] = {
             apiKey, environment in
             try await KiloUsageFetcher.fetchOrganizations(apiKey: apiKey, environment: environment)
@@ -32,6 +36,8 @@ public final class SettingsCoordinator: @unchecked Sendable {
         self.settingsStore = settingsStore
         self.onChange = onChange
         self.kiloOrganizationFetch = kiloOrganizationFetch
+        self.claudeSwapCoordinator = claudeSwapCoordinator
+        self.claudeSwap = claudeSwap ?? ClaudeSwapState()
         let config = try? configStore.load()
         let provider = config?.providerConfig(for: .kilo)
         let organizations = provider?.kiloKnownOrganizations ?? []
@@ -73,6 +79,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
             providers: panes,
             managedCodexAccounts: self.managedCodexAccountViews(config: config),
             kiloOrganizations: self.kiloOrganizations.payload(),
+            claudeSwap: self.claudeSwap.payload(),
             hooks: hooks,
             localization: LocalizationCatalog.load(locale: settings.language))
     }
@@ -180,6 +187,23 @@ public final class SettingsCoordinator: @unchecked Sendable {
                 enabledIDs: enabledIDs,
                 scopes: current.scopes)
         })
+    }
+
+    public func refreshClaudeSwap() async {
+        let config = try? self.configStore.load()
+        let payload = await self.claudeSwapCoordinator.refresh(config: config?.providerConfig(for: .claude))
+        self.claudeSwap.replace(payload)
+        self.onChange()
+    }
+
+    public func switchClaudeSwapAccount(number: Int) async {
+        let config = try? self.configStore.load()
+        await self.claudeSwapCoordinator.switchAccount(
+            number: number,
+            config: config?.providerConfig(for: .claude)) { payload in
+            self.claudeSwap.replace(payload)
+            self.onChange()
+        }
     }
 
     public func managedCodexAccountsDidChange() {

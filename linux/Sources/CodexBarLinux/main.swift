@@ -128,7 +128,8 @@ app.onActivate = {
         case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
                .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
                .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
-               .selectManagedCodexAccount, .refreshKiloOrganizations, .setKiloOrganizationEnabled:
+               .selectManagedCodexAccount, .refreshKiloOrganizations, .setKiloOrganizationEnabled,
+               .refreshClaudeSwap, .switchClaudeSwapAccount:
             break
         case .quit:
             app.quit()

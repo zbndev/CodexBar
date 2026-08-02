@@ -48,3 +48,15 @@ import Testing
     patch.apiKey = "x"
     #expect(patch.applying(to: config).id == .claude)
 }
+
+@Test func `claude-swap settings persist through a provider patch`() {
+    let config = ProviderConfig(id: .claude)
+    var patch = ProviderConfigPatch()
+    patch.claudeSwapEnabled = true
+    patch.claudeSwapShowSingleAccount = true
+    patch.claudeSwapExecutablePath = "fixture-executable"
+    let patched = patch.applying(to: config)
+    #expect(patched.claudeSwapEnabled == true)
+    #expect(patched.claudeSwapShowSingleAccount == true)
+    #expect(patched.claudeSwapExecutablePath == "fixture-executable")
+}

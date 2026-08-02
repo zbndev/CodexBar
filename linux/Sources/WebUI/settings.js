@@ -267,6 +267,9 @@ function renderRows(container, rows, providerID) {
       case 'organizations':
         renderKiloOrganizations(container, row.providerID);
         break;
+      case 'claudeSwap':
+        renderClaudeSwap(container, row.providerID);
+        break;
     }
   }
 
@@ -580,6 +583,55 @@ function renderKiloOrganizations(container, providerID) {
       }
     }
     container.appendChild(card);
+  }
+}
+
+function renderClaudeSwap(container, providerID) {
+  if (providerID !== 'claude') return;
+  const provider = state.payload.providers.find((item) => item.id === providerID);
+  const payload = state.payload.claudeSwap || {
+    executablePath: null, accounts: [], errorMessage: null,
+  };
+  const showSingle = provider.rows.some((row) =>
+    row.kind === 'toggle' && row.key === 'claudeSwapShowSingleAccount' && row.value);
+  container.appendChild(sectionTitle('claude-swap accounts'));
+
+  const refresh = pushButton('Refresh accounts');
+  refresh.addEventListener('click', () => bridge.send({ type: 'refreshClaudeSwap' }));
+  container.appendChild(actionRow(refresh));
+
+  if (payload.errorMessage) {
+    const error = document.createElement('div');
+    error.className = 'state is-error';
+    error.textContent = payload.errorMessage;
+    container.appendChild(error);
+  }
+
+  if (payload.executablePath) {
+    container.appendChild(labeledRow('Resolved executable', () => {
+      const value = document.createElement('span');
+      value.textContent = payload.executablePath;
+      return value;
+    }));
+  }
+
+  const accounts = payload.accounts || [];
+  if (accounts.length === 1 && !showSingle) return;
+  for (const account of accounts) {
+    const line = document.createElement('div');
+    line.className = 'row collection-row claude-swap-account';
+    const label = document.createElement('span');
+    label.className = 'row-title';
+    label.textContent = account.isActive
+      ? `${account.email} — Active (${account.status})`
+      : `${account.email} — ${account.status}`;
+    const select = pushButton(account.isActive ? 'Active' : 'Switch');
+    select.disabled = account.isActive;
+    select.addEventListener('click', () => {
+      bridge.send({ type: 'switchClaudeSwapAccount', number: account.number });
+    });
+    line.append(label, select);
+    container.appendChild(line);
   }
 }
 

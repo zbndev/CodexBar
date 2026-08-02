@@ -22,6 +22,8 @@ import Testing
     let commands: [BridgeCommand] = [
         .refreshKiloOrganizations,
         .setKiloOrganizationEnabled(id: "fixture-org", enabled: true),
+        .refreshClaudeSwap,
+        .switchClaudeSwapAccount(number: 2),
     ]
     for command in commands {
         #expect(try JSONDecoder().decode(
@@ -49,6 +51,20 @@ import Testing
         errorMessage: nil)
     #expect(try JSONDecoder().decode(
         KiloOrganizationsPayload.self,
+        from: JSONEncoder().encode(payload)) == payload)
+}
+
+@Test func `claude-swap payload round-trips through JSON`() throws {
+    let payload = ClaudeSwapPayload(
+        executablePath: "fixture-executable",
+        accounts: [CodexBarLinuxKit.ClaudeSwapAccountRow(
+            number: 2,
+            email: "fixture-account@example.test",
+            isActive: true,
+            status: "Ready")],
+        errorMessage: nil)
+    #expect(try JSONDecoder().decode(
+        ClaudeSwapPayload.self,
         from: JSONEncoder().encode(payload)) == payload)
 }
 
@@ -93,6 +109,7 @@ import Testing
         settings: LinuxSettings(),
         general: [],
         providers: [],
+        claudeSwap: ClaudeSwapPayload(executablePath: nil, accounts: [], errorMessage: nil),
         hooks: HooksConfig(),
         localization: LocalizationCatalog.load(locale: "en"))
     let encoder = JSONEncoder()

@@ -75,6 +75,7 @@ public enum PaneRow: Codable, Equatable, Sendable {
     case managedCodexAccounts(providerID: String)
     case quotaWarnings(providerID: String)
     case organizations(providerID: String)
+    case claudeSwap(providerID: String)
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -137,6 +138,8 @@ public enum PaneRow: Codable, Equatable, Sendable {
             self = .quotaWarnings(providerID: try c.decode(String.self, forKey: .providerID))
         case "organizations":
             self = .organizations(providerID: try c.decode(String.self, forKey: .providerID))
+        case "claudeSwap":
+            self = .claudeSwap(providerID: try c.decode(String.self, forKey: .providerID))
         case let unknown:
             throw DecodingError.dataCorruptedError(
                 forKey: .kind, in: c,
@@ -202,6 +205,9 @@ public enum PaneRow: Codable, Equatable, Sendable {
             try c.encode(providerID, forKey: .providerID)
         case let .organizations(providerID):
             try c.encode("organizations", forKey: .kind)
+            try c.encode(providerID, forKey: .providerID)
+        case let .claudeSwap(providerID):
+            try c.encode("claudeSwap", forKey: .kind)
             try c.encode(providerID, forKey: .providerID)
         }
     }

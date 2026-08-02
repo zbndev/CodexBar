@@ -181,6 +181,25 @@ public enum ProviderPaneGenerator {
             rows.append(.organizations(providerID: descriptor.id.rawValue))
         }
 
+        if descriptor.id == .claude {
+            rows.append(.toggle(
+                key: "claudeSwapEnabled",
+                title: "Enable claude-swap",
+                value: config?.claudeSwapEnabled ?? false))
+            rows.append(.field(
+                key: "claudeSwapExecutablePath",
+                title: "claude-swap executable",
+                value: config?.claudeSwapExecutablePath ?? "",
+                secure: false,
+                placeholder: "Optional; searches PATH",
+                visibleWhen: nil))
+            rows.append(.toggle(
+                key: "claudeSwapShowSingleAccount",
+                title: "Show a single account",
+                value: config?.claudeSwapShowSingleAccount ?? false))
+            rows.append(.claudeSwap(providerID: descriptor.id.rawValue))
+        }
+
         if ProviderPaneTraits.prioritizeExhaustedQuotaProviders.contains(descriptor.id) {
             rows.append(.toggle(
                 key: "antigravityPrioritizeExhaustedQuotas",

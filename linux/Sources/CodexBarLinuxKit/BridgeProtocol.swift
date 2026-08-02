@@ -26,6 +26,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case selectManagedCodexAccount(id: UUID?)
     case refreshKiloOrganizations
     case setKiloOrganizationEnabled(id: String, enabled: Bool)
+    case refreshClaudeSwap
+    case switchClaudeSwapAccount(number: Int)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -39,6 +41,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case data
         case config
         case enabled
+        case number
     }
 
     public init(from decoder: any Decoder) throws {
@@ -97,6 +100,10 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .setKiloOrganizationEnabled(
                 id: try container.decode(String.self, forKey: .id),
                 enabled: try container.decode(Bool.self, forKey: .enabled))
+        case "refreshClaudeSwap":
+            self = .refreshClaudeSwap
+        case "switchClaudeSwapAccount":
+            self = .switchClaudeSwapAccount(number: try container.decode(Int.self, forKey: .number))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -168,6 +175,11 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode("setKiloOrganizationEnabled", forKey: .type)
             try container.encode(id, forKey: .id)
             try container.encode(enabled, forKey: .enabled)
+        case .refreshClaudeSwap:
+            try container.encode("refreshClaudeSwap", forKey: .type)
+        case let .switchClaudeSwapAccount(number):
+            try container.encode("switchClaudeSwapAccount", forKey: .type)
+            try container.encode(number, forKey: .number)
         }
     }
 }

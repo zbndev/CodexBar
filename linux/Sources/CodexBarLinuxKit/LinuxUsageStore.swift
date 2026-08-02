@@ -7,25 +7,47 @@ import Foundation
 /// reads it synchronously when rendering, and hopping through an actor would
 /// mean the UI could only ever show data one loop iteration stale.
 public final class LinuxUsageStore: @unchecked Sendable {
+    public typealias ProviderFetch = @Sendable (
+        ProviderDescriptor,
+        ProviderSourceMode,
+        ProviderConfig?,
+        ProviderSettingsSnapshot?) async -> ProviderFetchOutcome
+
     private let lock = NSLock()
     private var views: [String: ProviderView] = [:]
+    private var records: [String: ProviderRefreshRecord] = [:]
     private var order: [String] = []
 
-    private let refresher = UsageRefresher()
+    private let fetch: ProviderFetch
     private let onSnapshot: @Sendable (ProviderSnapshotPayload) -> Void
+    private let onRefreshRecord: @Sendable (ProviderRefreshRecord) -> Void
     private let configStore: CodexBarConfigStore
     private let kiloOrganizations: KiloOrganizationsState
     private let onKiloOrganizationsChange: @Sendable () -> Void
+    private let historyStore: LinuxPlanHistoryStore?
+    private var defaultHistoryStore: LinuxPlanHistoryStore?
 
     public init(
         configStore: CodexBarConfigStore = CodexBarConfigStore(),
         kiloOrganizations: KiloOrganizationsState = KiloOrganizationsState(),
         onKiloOrganizationsChange: @escaping @Sendable () -> Void = {},
+        historyStore: LinuxPlanHistoryStore? = nil,
+        fetch: @escaping ProviderFetch = { descriptor, sourceMode, config, settings in
+            await UsageRefresher().fetch(
+                descriptor: descriptor,
+                sourceMode: sourceMode,
+                config: config,
+                settings: settings)
+        },
+        onRefreshRecord: @escaping @Sendable (ProviderRefreshRecord) -> Void = { _ in },
         onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void)
     {
         self.configStore = configStore
         self.kiloOrganizations = kiloOrganizations
         self.onKiloOrganizationsChange = onKiloOrganizationsChange
+        self.historyStore = historyStore
+        self.fetch = fetch
+        self.onRefreshRecord = onRefreshRecord
         self.onSnapshot = onSnapshot
         self.seedPlaceholders()
     }
@@ -61,6 +83,16 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.onSnapshot(self.currentPayload())
     }
 
+    private func store(_ record: ProviderRefreshRecord) {
+        self.lock.lock()
+        self.views[record.view.id] = record.view
+        self.records[record.view.id] = record
+        self.lock.unlock()
+        self.onSnapshot(self.currentPayload())
+        self.recordHistory(record)
+        self.onRefreshRecord(record)
+    }
+
     /// Refreshes every enabled provider concurrently, publishing each card as
     /// soon as it lands so a slow provider never blocks the rest.
     public func refreshAll() {
@@ -88,29 +120,69 @@ public final class LinuxUsageStore: @unchecked Sendable {
             return
         }
         let settings = LinuxSettingsSnapshot.make(config: config)
-        let refresher = self.refresher
+        let fetch = self.fetch
         Task.detached { [weak self] in
             guard let self else { return }
-            let result = await refresher.fetch(
-                descriptor: descriptor,
-                sourceMode: mode,
-                config: providerConfig,
-                settings: settings)
+            let outcome = await fetch(descriptor, mode, providerConfig, settings)
             let view: ProviderView
-            switch result {
+            let usage: UsageSnapshot?
+            switch outcome.result {
             case let .success(fetched):
+                usage = fetched.usage
                 view = SnapshotBuilder.view(
                     descriptor: descriptor,
                     enabled: true,
                     usage: fetched.usage,
                     sourceLabel: fetched.sourceLabel)
             case let .failure(error):
+                usage = nil
                 view = SnapshotBuilder.failureView(
                     descriptor: descriptor,
                     enabled: true,
                     error: error)
             }
-            self.store(view)
+            self.store(ProviderRefreshRecord(view: view, snapshot: usage, outcome: outcome))
+        }
+    }
+
+    private func recordHistory(_ record: ProviderRefreshRecord) {
+        guard let historyStore = self.resolvedHistoryStore(),
+              let snapshot = record.snapshot
+        else { return }
+        let capturedAt = snapshot.updatedAt
+        let baseWindows: [(String, RateWindow?)] = [
+            ("primary", snapshot.primary),
+            ("secondary", snapshot.secondary),
+            ("tertiary", snapshot.tertiary),
+        ]
+        for (windowID, window) in baseWindows {
+            guard let window, window.usedPercent.isFinite else { continue }
+            try? historyStore.record(
+                providerID: record.view.id,
+                windowID: windowID,
+                point: UtilizationHistoryPoint(
+                    capturedAt: capturedAt,
+                    usedPercent: window.usedPercent,
+                    resetsAt: window.resetsAt))
+        }
+        for named in snapshot.extraRateWindows ?? [] where named.usageKnown && named.window.usedPercent.isFinite {
+            try? historyStore.record(
+                providerID: record.view.id,
+                windowID: named.id,
+                point: UtilizationHistoryPoint(
+                    capturedAt: capturedAt,
+                    usedPercent: named.window.usedPercent,
+                    resetsAt: named.window.resetsAt))
+        }
+    }
+
+    private func resolvedHistoryStore() -> LinuxPlanHistoryStore? {
+        self.lock.withLock {
+            if let historyStore = self.historyStore { return historyStore }
+            if self.defaultHistoryStore == nil {
+                self.defaultHistoryStore = try? LinuxPlanHistoryStore()
+            }
+            return self.defaultHistoryStore
         }
     }
 
@@ -243,6 +315,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.lock.lock()
         self.order = descriptors.map { $0.id.rawValue }
         self.views = self.views.filter { enabledIDs.contains($0.key) }
+        self.records = self.records.filter { enabledIDs.contains($0.key) }
         for descriptor in descriptors where self.views[descriptor.id.rawValue] == nil {
             self.views[descriptor.id.rawValue] = ProviderCatalog.placeholderView(
                 for: descriptor, enabled: true)

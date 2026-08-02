@@ -16,7 +16,7 @@ public struct UsageRefresher: Sendable {
         descriptor: ProviderDescriptor,
         sourceMode: ProviderSourceMode,
         config: ProviderConfig? = nil,
-        settings: ProviderSettingsSnapshot? = nil) async -> Result<ProviderFetchResult, Error>
+        settings: ProviderSettingsSnapshot? = nil) async -> ProviderFetchOutcome
     {
         let context = Self.makeContext(
             descriptor: descriptor,
@@ -30,7 +30,7 @@ public struct UsageRefresher: Sendable {
         let outcome = await descriptor.fetchPlan.pipeline.fetch(
             context: context,
             provider: descriptor.id)
-        return outcome.result
+        return outcome
     }
 
     /// Split out so a test can assert that a strategy accepts the context this

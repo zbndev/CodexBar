@@ -1,23 +1,5 @@
-:root {
-  color-scheme: light dark;
-  --bg: rgba(244, 244, 248, 0.92);
-  --fg: #1a1a1f;
-  --fg-dim: rgba(26, 26, 31, 0.55);
-  --track: rgba(26, 26, 31, 0.12);
-  --divider: rgba(26, 26, 31, 0.10);
-  --selected: rgba(60, 90, 240, 0.14);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: rgba(28, 28, 32, 0.94);
-    --fg: #f2f2f5;
-    --fg-dim: rgba(242, 242, 245, 0.55);
-    --track: rgba(242, 242, 245, 0.16);
-    --divider: rgba(242, 242, 245, 0.12);
-    --selected: rgba(120, 150, 255, 0.20);
-  }
-}
+/* The popup. Colours, metrics and type all come from tokens.css — this file
+   declares no values of its own, only which token goes where. */
 
 html, body {
   margin: 0;
@@ -25,38 +7,41 @@ html, body {
   overflow-x: hidden;
 }
 
-/* Column layout so the footer sits on the bottom edge however short the
+/* Column layout so the action list sits on the bottom edge however short the
    content is, and the detail pane — not the page — takes the scrollbar. */
 body {
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  /* The popup is an undecorated window and is the only surface that stays
+     translucent; Settings is an ordinary decorated window and is not. */
+  background: var(--bg-translucent);
   color: var(--fg);
-  font: 13px/1.45 system-ui, -apple-system, sans-serif;
+  font: var(--text-body);
 }
+
+/* --- Provider strip ------------------------------------------------------- */
 
 .provider-strip {
   flex: 0 0 auto;
   display: flex;
-  gap: 4px;
-  padding: 10px 10px 0;
+  gap: var(--space-1);
+  padding: var(--pad-edge) var(--pad-edge) 0;
   overflow-x: auto;
 }
 
 .provider-tab {
   flex: 0 0 auto;
-  width: 66px;
+  width: var(--tab-w);
   /* The bottom padding is what separates the selection highlight from the
      usage gauge below it. Without it the highlight ends flush against the
      gauge and the two read as one shape. */
-  padding: 6px 2px 5px;
+  padding: var(--space-2) var(--space-1) 5px;
   border: 0;
   background: transparent;
   color: var(--fg-dim);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  font: inherit;
-  font-size: 11px;
+  font: var(--text-caption);
   /* Centring is done by the flex box, not by `margin: auto` on the icon:
      brand SVGs disagree about intrinsic size, and several size themselves
      in `em`. A fixed box with a stretched SVG makes them all agree. */
@@ -65,34 +50,18 @@ body {
   align-items: center;
 }
 
+/* Selection is the application accent, never the provider's brand colour: six
+   shipped brand colours sit near #211E1E and are unreadable as a highlight on
+   the dark theme. The brand paints the gauge below, which is data. */
 .provider-tab.is-selected {
-  background: var(--selected);
+  background: var(--accent-soft);
   color: var(--fg);
 }
 
 .provider-tab .icon {
-  flex: 0 0 auto;
-  width: 22px;
-  height: 22px;
-  margin-bottom: 3px;
-}
-
-.provider-tab .icon svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-/* Brand marks that paint themselves near-black vanish against the dark
-   background. They sit on a light chip instead of being inverted, so the brand
-   keeps its own colour. icons.js decides which icons get the class. */
-@media (prefers-color-scheme: dark) {
-  .provider-tab .icon.needs-backdrop {
-    box-sizing: border-box;
-    padding: 2px;
-    border-radius: 5px;
-    background: rgba(242, 242, 245, 0.90);
-  }
+  width: var(--icon-md);
+  height: var(--icon-md);
+  margin-bottom: var(--space-1);
 }
 
 .provider-tab .label {
@@ -107,9 +76,9 @@ body {
    the track/fill pair used in the detail pane below. */
 .provider-tab .usage {
   width: 100%;
-  height: 3px;
+  height: var(--bar-thin);
   margin-top: 5px;
-  border-radius: 2px;
+  border-radius: var(--radius-pill);
   background: var(--track);
   overflow: hidden;
 }
@@ -117,70 +86,91 @@ body {
 .provider-tab .usage-fill {
   display: block;
   height: 100%;
-  border-radius: 2px;
-  background: var(--accent, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--brand);
   transition: width 0.3s ease;
 }
+
+/* --- Detail --------------------------------------------------------------- */
 
 .detail {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 14px 16px 4px;
+  padding: var(--pad-edge) var(--pad-edge) var(--space-1);
 }
 
-.detail h1 { margin: 0; font-size: 21px; font-weight: 600; }
+.detail h1 { margin: 0; font: var(--text-title); }
 
 .detail-meta {
   display: flex;
   justify-content: space-between;
+  gap: var(--space-3);
   color: var(--fg-dim);
-  margin: 2px 0 12px;
+  font: var(--text-small);
+  margin: var(--space-1) 0 var(--space-4);
 }
 
-.window { margin: 0 0 14px; }
-.window h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+.window { margin: 0 0 var(--space-4); }
+.window h2 { margin: 0 0 var(--space-2); font: var(--text-heading); }
 
 .bar {
-  height: 5px;
-  border-radius: 3px;
+  height: var(--bar);
+  border-radius: var(--radius-pill);
   background: var(--track);
   overflow: hidden;
 }
 
 .bar-fill {
   height: 100%;
-  border-radius: 3px;
-  background: var(--accent, #6e5aff);
+  border-radius: var(--radius-pill);
+  background: var(--brand);
   transition: width 0.3s ease;
 }
 
 .window-meta {
   display: flex;
   justify-content: space-between;
-  margin-top: 5px;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
   color: var(--fg-dim);
+  font: var(--text-small);
 }
 
-.state { padding: 10px 0; color: var(--fg-dim); }
-.state.is-error { color: #d0453b; }
+.state { padding: var(--space-3) 0; color: var(--fg-dim); }
+.state.is-error { color: var(--danger); }
 
-.footer {
+/* --- Action list ---------------------------------------------------------- */
+
+.actions {
   flex: 0 0 auto;
   display: flex;
-  gap: 8px;
-  padding: 10px 16px 14px;
+  flex-direction: column;
+  padding: var(--space-2);
   border-top: 1px solid var(--divider);
 }
 
-.footer-button {
-  flex: 1;
-  padding: 7px 10px;
+.action {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 30px;
+  padding: 0 var(--space-2);
   border: 0;
-  border-radius: 7px;
-  background: var(--track);
+  border-radius: var(--radius-md);
+  background: transparent;
   color: var(--fg);
-  font: inherit;
+  font: var(--text-body);
+  text-align: left;
   cursor: pointer;
 }
 
-.footer-button:hover { background: var(--selected); }
+.action:hover { background: var(--accent-soft); }
+
+/* Dimmed so the labels lead and the glyphs only mark the line. */
+.action .icon { opacity: 0.7; }
+
+.action-divider {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--divider);
+}

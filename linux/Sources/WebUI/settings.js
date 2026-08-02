@@ -58,9 +58,14 @@ function renderSidebar() {
   const providers = document.getElementById('provider-list');
   general.replaceChildren();
   providers.replaceChildren();
+  document.getElementById('general-title').textContent = 'General';
+  document.getElementById('provider-title').textContent = 'Providers';
 
+  // The general panes are the ones that had no icon, which put two left edges
+  // of text in one list. uiIcon keys are GeneralPane.id and it falls back on
+  // its own, so a pane added to the catalogue needs nothing here.
   for (const pane of state.payload.general || []) {
-    general.appendChild(sidebarItem(pane.id, t(pane.title), null));
+    general.appendChild(sidebarItem(pane.id, t(pane.title), uiIcon(pane.id)));
   }
   for (const provider of state.payload.providers) {
     const header = provider.rows.find((r) => r.kind === 'header');
@@ -82,6 +87,7 @@ function sidebarItem(id, title, iconSVG) {
     item.appendChild(holder);
   }
   const label = document.createElement('span');
+  label.className = 'label';
   label.textContent = title;
   item.appendChild(label);
   item.addEventListener('click', () => {
@@ -122,8 +128,27 @@ function render() {
     if (provider) renderRows(pane, provider.rows, provider.id);
   } else {
     const general = (state.payload.general || []).find((p) => p.id === state.selectedPane);
-    if (general) renderRows(pane, general.rows, null);
+    if (general) {
+      pane.appendChild(generalHeader(general));
+      renderRows(pane, general.rows, null);
+    }
   }
+}
+
+/// General panes carry a title in the payload but no header row — only
+/// providers send one — so they rendered as unnamed sheets next to a provider
+/// pane that had a heading. The header is synthesised rather than added to the
+/// payload: the Swift side is not touched by this work.
+function generalHeader(pane) {
+  const header = document.createElement('div');
+  header.className = 'pane-header';
+  const holder = document.createElement('span');
+  holder.className = 'icon';
+  mountIcon(holder, uiIcon(pane.id));
+  const title = document.createElement('h1');
+  title.textContent = t(pane.title);
+  header.append(holder, title);
+  return header;
 }
 
 function renderRows(container, rows, providerID) {
@@ -142,7 +167,9 @@ function renderRows(container, rows, providerID) {
       case 'header': {
         const header = document.createElement('div');
         header.className = 'pane-header';
-        header.style.setProperty('--accent', row.accentColorHex);
+        // --brand, not --accent: the brand colour reaches the icon chip and
+        // nothing else. Selection, links and focus are the application accent.
+        header.style.setProperty('--brand', row.accentColorHex);
         if (row.iconSVG) {
           const holder = document.createElement('span');
           holder.className = 'icon';
@@ -222,10 +249,9 @@ function renderRows(container, rows, providerID) {
       case 'button': {
         // The title is the button's own text — putting it through labeledRow
         // printed it twice, once as the row's label and once on the button.
-        const button = document.createElement('button');
-        button.textContent = t(row.title);
-        button.addEventListener('click', () => handleAction(row.action, providerID));
-        container.appendChild(actionRow(button));
+        const control = pushButton(t(row.title), buttonRole(row.action));
+        control.addEventListener('click', () => handleAction(row.action, providerID));
+        container.appendChild(actionRow(control));
         if (row.action === 'login' && providerID) renderLoginProgress(container, providerID);
         break;
       }
@@ -250,15 +276,35 @@ function actionRow(...controls) {
   return row;
 }
 
+/// Every row kind — info and link included — puts its control in a fixed-width
+/// cell, which is what gives a pane one vertical instead of a run of controls
+/// floating at whatever width each happened to be.
 function labeledRow(title, controlFactory) {
   const row = document.createElement('div');
   row.className = 'row';
   const label = document.createElement('span');
   label.className = 'row-title';
   label.textContent = title;
-  row.appendChild(label);
-  row.appendChild(controlFactory());
+  const cell = document.createElement('span');
+  cell.className = 'row-control';
+  cell.appendChild(controlFactory());
+  row.append(label, cell);
   return row;
+}
+
+/// Buttons carry one of three roles, derived from the action already present in
+/// PaneRow — no Swift change is needed to tell a sign-in from a Remove.
+function buttonRole(action) {
+  if (action === 'login') return 'primary';
+  if (action === 'quit') return 'danger';
+  return 'secondary';
+}
+
+function pushButton(text, role = 'secondary') {
+  const button = document.createElement('button');
+  button.className = role === 'secondary' ? 'button' : `button button-${role}`;
+  button.textContent = text;
+  return button;
 }
 
 function currentValues(rows, providerID) {
@@ -351,8 +397,7 @@ function renderLoginProgress(container, providerID) {
   line.appendChild(text);
 
   if (progress.phase !== 'finished' && progress.phase !== 'failed') {
-    const cancel = document.createElement('button');
-    cancel.textContent = t('linux.login.cancel');
+    const cancel = pushButton(t('linux.login.cancel'));
     cancel.addEventListener('click', () => handleAction('cancelLogin', providerID));
     line.appendChild(cancel);
   }
@@ -380,8 +425,7 @@ function renderTokenAccounts(container, providerID) {
     const label = document.createElement('span');
     label.className = 'row-title';
     label.textContent = account.label;
-    const remove = document.createElement('button');
-    remove.textContent = t('linux.settings.remove');
+    const remove = pushButton(t('linux.settings.remove'), 'danger');
     remove.addEventListener('click', () => {
       data.accounts.splice(index, 1);
       data.activeIndex = Math.max(0, Math.min(data.activeIndex, data.accounts.length - 1));
@@ -392,15 +436,17 @@ function renderTokenAccounts(container, providerID) {
     container.appendChild(line);
   });
 
+  // A card of ordinary labelled rows rather than five bare placeholders on one
+  // line: the placeholders were the only thing saying what each box was, and
+  // they vanish the moment anything is typed.
   const form = document.createElement('div');
-  form.className = 'row collection-row';
-  const labelInput = textInput('Label');
-  const tokenInput = textInput('Token', true);
-  const scopeInput = textInput('Usage scope (optional)');
-  const organizationInput = textInput('Organization ID (optional)');
-  const workspaceInput = textInput('Workspace ID (optional)');
-  const add = document.createElement('button');
-  add.textContent = t('linux.settings.add');
+  form.className = 'collection-card';
+  const labelInput = textInput();
+  const tokenInput = textInput('', true);
+  const scopeInput = textInput('Optional');
+  const organizationInput = textInput('Optional');
+  const workspaceInput = textInput('Optional');
+  const add = pushButton(t('linux.settings.add'));
   add.addEventListener('click', () => {
     if (!labelInput.value.trim() || !tokenInput.value.trim()) return;
     data.accounts.push({
@@ -418,7 +464,13 @@ function renderTokenAccounts(container, providerID) {
     data.activeIndex = data.accounts.length - 1;
     replaceTokenAccounts(providerID, data);
   });
-  form.append(labelInput, tokenInput, scopeInput, organizationInput, workspaceInput, add);
+  form.append(
+    labeledRow('Label', () => labelInput),
+    labeledRow('Token', () => tokenInput),
+    labeledRow('Usage scope', () => scopeInput),
+    labeledRow('Organization ID', () => organizationInput),
+    labeledRow('Workspace ID', () => workspaceInput),
+    actionRow(add));
   container.appendChild(form);
 }
 
@@ -451,8 +503,7 @@ function renderQuotaWarnings(container, providerID) {
     });
     container.appendChild(labeledRow(`${capitalize(windowName)} thresholds`, () => thresholds));
   }
-  const clear = document.createElement('button');
-  clear.textContent = t('linux.settings.useGlobal');
+  const clear = pushButton(t('linux.settings.useGlobal'));
   clear.addEventListener('click', () => {
     bridge.send({ type: 'updateQuotaWarnings', providerID, config: null });
   });
@@ -495,17 +546,18 @@ function renderHooks(container) {
       rule.arguments = value.split('\n').filter(Boolean);
       saveHooks(hooks);
     }));
-    const remove = document.createElement('button');
-    remove.textContent = 'Delete rule';
+    // Through actionRow like every other button. This was the one button in the
+    // application dropped straight into a container, so it sat flush against
+    // the divider the row above it drew.
+    const remove = pushButton('Delete rule', 'danger');
     remove.addEventListener('click', () => {
       hooks.events.splice(index, 1);
       saveHooks(hooks);
     });
-    card.appendChild(remove);
+    card.appendChild(actionRow(remove));
     container.appendChild(card);
   });
-  const add = document.createElement('button');
-  add.textContent = 'Add rule';
+  const add = pushButton('Add rule');
   // Mirrors HooksConfig.maximumRuleCount.
   add.disabled = hooks.events.length >= 32;
   add.addEventListener('click', () => {
@@ -529,7 +581,7 @@ function sectionTitle(text) {
   return title;
 }
 
-function textInput(placeholder, secure = false) {
+function textInput(placeholder = '', secure = false) {
   const input = document.createElement('input');
   input.type = secure ? 'password' : 'text';
   input.placeholder = placeholder;

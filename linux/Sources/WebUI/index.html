@@ -4,19 +4,26 @@
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self' codexbar:; img-src codexbar: data:; style-src codexbar: 'unsafe-inline'; script-src codexbar:; connect-src 'none'; font-src codexbar:" />
+    <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div id="providers" class="provider-strip"></div>
     <div id="detail" class="detail"></div>
-    <div class="footer">
-      <button id="refresh" class="footer-button">Refresh</button>
-      <button id="add-account" class="footer-button">Add Account</button>
-      <button id="settings" class="footer-button">Settings</button>
-      <button id="quit" class="footer-button">Quit</button>
-    </div>
+    <!-- A list, not a row of buttons: these are four commands of equal weight,
+         and a row forces one of them to be picked as primary. The list also
+         takes the whole bottom edge, so the empty space above short content
+         stops reading as a hole. app.js fills each button's icon and label. -->
+    <nav class="actions">
+      <button id="refresh" class="action"></button>
+      <button id="add-account" class="action"></button>
+      <div class="action-divider"></div>
+      <button id="settings" class="action"></button>
+      <button id="quit" class="action"></button>
+    </nav>
     <script src="i18n.js"></script>
     <script src="icons.js"></script>
+    <script src="ui-icons.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

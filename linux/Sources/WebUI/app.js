@@ -67,6 +67,19 @@ function formatReset(window) {
   return `Resets in ${minutes}m`;
 }
 
+/// Second-level precision is noise in a window that refreshes once a minute, so
+/// the freshness line stays relative until relative stops being informative.
+/// English literals, like the `Updated ${…}` they replace: the localisation
+/// catalogues come from upstream and the Linux layer has no keys of its own.
+function formatUpdated(timestamp) {
+  const date = new Date(timestamp);
+  const elapsed = Date.now() - date.getTime();
+  if (elapsed < 45000) return 'Updated just now';
+  const minutes = Math.round(elapsed / 60000);
+  if (minutes < 90) return `Updated ${minutes} min ago`;
+  return `Updated ${date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 /// Bars can show used or remaining; the strip gauge and the detail bars must
 /// never disagree, so both go through here.
 function displayedPercent(usedPercent) {
@@ -80,7 +93,10 @@ function renderStrip() {
   for (const provider of state.providers) {
     const tab = document.createElement('button');
     tab.className = 'provider-tab' + (provider.id === state.selectedID ? ' is-selected' : '');
-    tab.style.setProperty('--accent', provider.accentColorHex);
+    // --brand, not --accent: the brand colour paints the gauge, which is data.
+    // Selection uses the application accent so it stays readable for the six
+    // providers whose brand colour is near-black.
+    tab.style.setProperty('--brand', provider.accentColorHex);
 
     if (provider.iconSVG) {
       const holder = document.createElement('span');
@@ -125,7 +141,7 @@ function renderDetail() {
     return;
   }
 
-  detail.style.setProperty('--accent', provider.accentColorHex);
+  detail.style.setProperty('--brand', provider.accentColorHex);
 
   const title = document.createElement('h1');
   title.textContent = provider.displayName;
@@ -134,10 +150,11 @@ function renderDetail() {
   const meta = document.createElement('div');
   meta.className = 'detail-meta';
   const left = document.createElement('span');
+  left.className = 'tabular';
   left.textContent = provider.isLoading
     ? t('Updating…')
     : provider.updatedAt
-      ? `Updated ${new Date(provider.updatedAt).toLocaleTimeString()}`
+      ? formatUpdated(provider.updatedAt)
       : '';
   const right = document.createElement('span');
   right.textContent = (state.display && state.display.hidePersonalInfo) ? '' : (provider.plan || '');
@@ -187,10 +204,12 @@ function renderDetail() {
     const meta = document.createElement('div');
     meta.className = 'window-meta';
     const used = document.createElement('span');
+    used.className = 'tabular';
     const showUsed = !state.display || state.display.usageBarsShowUsed;
     used.textContent =
       `${Math.round(displayedPercent(window.usedPercent))}% ${showUsed ? t('used') : t('remaining')}`;
     const reset = document.createElement('span');
+    reset.className = 'tabular';
     reset.textContent = formatReset(window);
     meta.append(used, reset);
     section.appendChild(meta);
@@ -199,15 +218,34 @@ function renderDetail() {
   }
 }
 
-function renderFooter() {
-  document.getElementById('refresh').textContent = t('Refresh');
-  document.getElementById('add-account').textContent = t('Add Account');
-  document.getElementById('settings').textContent = t('linux.settings.title');
-  document.getElementById('quit').textContent = t('Quit');
+// The element ids and their handlers are unchanged from the button footer —
+// only the markup and the styling moved. No command is added here: Usage
+// Dashboard and Status Page would need the provider's URL plumbed into the
+// popup, which is a feature, not polish.
+const ACTIONS = [
+  { id: 'refresh', label: 'Refresh' },
+  { id: 'add-account', label: 'Add Account' },
+  { id: 'settings', label: 'linux.settings.title' },
+  { id: 'quit', label: 'Quit' },
+];
+
+function renderActions() {
+  for (const action of ACTIONS) {
+    const button = document.getElementById(action.id);
+    button.replaceChildren();
+    const holder = document.createElement('span');
+    holder.className = 'icon';
+    // Through mountIcon like every other icon: these are drawn in currentColor
+    // and so clear its dark-backdrop test by construction.
+    mountIcon(holder, uiIcon(action.id));
+    const label = document.createElement('span');
+    label.textContent = t(action.label);
+    button.append(holder, label);
+  }
 }
 
 function render() {
-  renderFooter();
+  renderActions();
   renderStrip();
   renderDetail();
 }

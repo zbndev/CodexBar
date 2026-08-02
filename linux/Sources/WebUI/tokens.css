@@ -1,0 +1,138 @@
+/* The single source of truth for colour, metric and type in both windows.
+   Linked first in index.html and settings.html; everything after it consumes
+   these variables and declares none of its own.
+
+   Before this file the two stylesheets each declared their own :root and drifted
+   apart — --bg at 0.92 in one and 0.97 in the other, --accent defined only in
+   Settings, h1 at 21px in the popup against 19px in Settings for the same role.
+   Nothing here is new design: it is the same interface with one set of numbers. */
+
+:root {
+  color-scheme: light dark;
+
+  /* --- Colour: light ---------------------------------------------------- */
+  --bg: #f4f4f8;
+  --bg-translucent: rgba(244, 244, 248, 0.92);
+  --bg-elevated: #ebebf0;
+  --surface: rgba(26, 26, 31, 0.03);
+  --fg: #1a1a1f;
+  --fg-dim: rgba(26, 26, 31, 0.55);
+  --track: rgba(26, 26, 31, 0.12);
+  --divider: rgba(26, 26, 31, 0.10);
+  --accent: #5a4fe0;
+  --accent-soft: rgba(90, 79, 224, 0.14);
+  --on-accent: #ffffff;
+  --danger: #c8372d;
+  --control-bg: #ffffff;
+  --icon-chip: transparent;
+
+  /* --- Metrics ---------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+
+  /* By role, not by taste: sm for the chips under icons, md for anything
+     interactive, lg for cards, pill for bars. */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  --control-h: 30px;
+  --control-w: 240px;
+  --icon-sm: 16px;
+  --icon-md: 22px;
+  --icon-lg: 24px;
+  --bar-thin: 3px;
+  --bar: 6px;
+  --tab-w: 64px;
+  --rail-w: 210px;
+  --pad-edge: 16px;
+
+  /* --- Type ------------------------------------------------------------- */
+  /* -apple-system is gone: on Linux it resolves to nothing and only disguises
+     the real order of the stack. */
+  --font-ui: system-ui, "Adwaita Sans", Cantarell, sans-serif;
+  --font-mono: ui-monospace, "JetBrains Mono", monospace;
+
+  --text-title: 600 20px/1.25 var(--font-ui);
+  --text-heading: 600 15px/1.3 var(--font-ui);
+  --text-body: 400 13px/1.45 var(--font-ui);
+  --text-small: 400 12px/1.4 var(--font-ui);
+  --text-caption: 400 11px/1.3 var(--font-ui);
+  --text-label: 600 11px/1.3 var(--font-ui);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c20;
+    --bg-translucent: rgba(28, 28, 32, 0.94);
+    --bg-elevated: #16161a;
+    --surface: rgba(242, 242, 245, 0.04);
+    --fg: #f2f2f5;
+    --fg-dim: rgba(242, 242, 245, 0.55);
+    --track: rgba(242, 242, 245, 0.16);
+    --divider: rgba(242, 242, 245, 0.12);
+    --accent: #9b8cff;
+    --accent-soft: rgba(155, 140, 255, 0.20);
+    --on-accent: #1c1c20;
+    --danger: #ff7b70;
+    --control-bg: rgba(242, 242, 245, 0.06);
+    --icon-chip: rgba(242, 242, 245, 0.90);
+  }
+}
+
+/* The provider's brand colour paints data and nothing else — bar fills and the
+   icon chip. It is set per element by app.js and settings.js from the same
+   accentColorHex as before; the fallback keeps a bar from vanishing if it is
+   ever read outside a provider context. Six shipped brand colours sit near
+   #211E1E, so selection, links and focus use --accent instead: brand-coloured
+   selection on the dark theme is unreadable for those six. */
+:root { --brand: var(--accent); }
+
+/* --- Shared primitives ---------------------------------------------------- */
+
+/* There was no focus style at all in either window. Navigating the real one by
+   keyboard, the focus position is simply not determinable. */
+/* No border-radius here on purpose: the outline already follows the element's
+   own radius, and forcing one would square off the pill controls while they
+   hold focus. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Percentages and reset timers change width on every refresh without this. */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* The icon holder — never the SVG — carries the box, so the chip can be added
+   inside it without changing the footprint and nudging every label along.
+   Brand marks that paint themselves near-black vanish against the dark
+   background. They sit on a light chip rather than being inverted, so the brand
+   keeps its own colour; icons.js decides which icons get the class. */
+.icon {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: block;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Scoped to the dark theme, not written as a transparent chip in the light one:
+   the padding would shrink the mark in a theme that never needed the fix. */
+@media (prefers-color-scheme: dark) {
+  .icon.needs-backdrop {
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    background: var(--icon-chip);
+  }
+}

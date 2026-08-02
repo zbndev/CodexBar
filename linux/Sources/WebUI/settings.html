@@ -4,17 +4,22 @@
     <meta charset="utf-8" />
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self' codexbar:; img-src codexbar: data:; style-src codexbar: 'unsafe-inline'; script-src codexbar:; connect-src 'none'; font-src codexbar:" />
+    <link rel="stylesheet" href="tokens.css" />
     <link rel="stylesheet" href="settings.css" />
   </head>
   <body>
+    <!-- Both groups carry a heading now; the bare divider left the two halves
+         of the list unnamed. settings.js fills them. -->
     <nav id="sidebar">
+      <div class="sidebar-group-title" id="general-title"></div>
       <div id="general-list"></div>
-      <div class="sidebar-divider"></div>
+      <div class="sidebar-group-title" id="provider-title"></div>
       <div id="provider-list"></div>
     </nav>
     <main id="pane"></main>
     <script src="i18n.js"></script>
     <script src="icons.js"></script>
+    <script src="ui-icons.js"></script>
     <script src="settings.js"></script>
   </body>
 </html>

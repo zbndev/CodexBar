@@ -46,7 +46,10 @@ body {
 .provider-tab {
   flex: 0 0 auto;
   width: 66px;
-  padding: 6px 2px 0;
+  /* The bottom padding is what separates the selection highlight from the
+     usage gauge below it. Without it the highlight ends flush against the
+     gauge and the two read as one shape. */
+  padding: 6px 2px 5px;
   border: 0;
   background: transparent;
   color: var(--fg-dim);

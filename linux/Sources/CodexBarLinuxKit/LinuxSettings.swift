@@ -51,6 +51,11 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
     public var usageBarsShowUsed: Bool
     public var resetTimesShowAbsolute: Bool
     public var showCreditsAndExtraUsage: Bool
+    /// Token-cost estimates are opt-in, matching upstream's `costUsageEnabled`.
+    /// Deliberately separate from `showCreditsAndExtraUsage`: credits and extra
+    /// usage are a balance the provider reports, this is an estimate derived
+    /// from local token counts, and on a subscription plan it bills nothing.
+    public var costUsageEnabled: Bool
 
     // Notifications (delivery itself is M5; the toggles persist now)
     public var sessionQuotaNotificationsEnabled: Bool
@@ -65,6 +70,10 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
 
     // Advanced
     public var hidePersonalInfo: Bool
+    /// Opt-in, matching upstream's `agentSessionsEnabled`. The scan runs
+    /// regardless — `.adaptiveAgentAware` refresh feeds on its activity
+    /// timestamp — so this gates publication only, in `ProviderSnapshotPayload`.
+    public var agentSessionsEnabled: Bool
     public var includeFileOnlySessions: Bool
     public var providerStorageFootprintsEnabled: Bool
     public var debugMenuEnabled: Bool
@@ -78,6 +87,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.usageBarsShowUsed = true
         self.resetTimesShowAbsolute = false
         self.showCreditsAndExtraUsage = true
+        self.costUsageEnabled = false
         self.sessionQuotaNotificationsEnabled = true
         self.quotaWarningNotificationsEnabled = true
         self.predictivePaceWarningsEnabled = true
@@ -88,6 +98,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.quotaWarningSoundEnabled = true
         self.quotaWarningOnScreenAlertEnabled = false
         self.hidePersonalInfo = false
+        self.agentSessionsEnabled = false
         self.includeFileOnlySessions = true
         self.providerStorageFootprintsEnabled = false
         self.debugMenuEnabled = false
@@ -113,6 +124,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
             Bool.self, .resetTimesShowAbsolute, or: defaults.resetTimesShowAbsolute)
         self.showCreditsAndExtraUsage = try value(
             Bool.self, .showCreditsAndExtraUsage, or: defaults.showCreditsAndExtraUsage)
+        self.costUsageEnabled = try value(Bool.self, .costUsageEnabled, or: defaults.costUsageEnabled)
         self.sessionQuotaNotificationsEnabled = try value(
             Bool.self, .sessionQuotaNotificationsEnabled, or: defaults.sessionQuotaNotificationsEnabled)
         self.quotaWarningNotificationsEnabled = try value(
@@ -132,6 +144,8 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.quotaWarningOnScreenAlertEnabled = try value(
             Bool.self, .quotaWarningOnScreenAlertEnabled, or: defaults.quotaWarningOnScreenAlertEnabled)
         self.hidePersonalInfo = try value(Bool.self, .hidePersonalInfo, or: defaults.hidePersonalInfo)
+        self.agentSessionsEnabled = try value(
+            Bool.self, .agentSessionsEnabled, or: defaults.agentSessionsEnabled)
         self.includeFileOnlySessions = try value(
             Bool.self, .includeFileOnlySessions, or: defaults.includeFileOnlySessions)
         self.providerStorageFootprintsEnabled = try value(

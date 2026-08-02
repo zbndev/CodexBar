@@ -90,3 +90,32 @@ private func tempFile(_ name: String = "settings.json") -> URL {
     #expect(RefreshInterval.fiveMinutes.seconds == 300)
     #expect(RefreshInterval.thirtyMinutes.seconds == 1800)
 }
+
+@Test func `cost estimates and agent sessions are opt-in`() {
+    let defaults = LinuxSettings()
+    #expect(!defaults.costUsageEnabled)
+    #expect(!defaults.agentSessionsEnabled)
+}
+
+@Test func `settings written before the opt-in preferences existed decode as disabled`() throws {
+    let url = tempFile()
+    try FileManager.default.createDirectory(
+        at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try #"{"showCreditsAndExtraUsage":true,"includeFileOnlySessions":true}"#
+        .write(to: url, atomically: true, encoding: .utf8)
+    let loaded = LinuxSettingsStore(fileURL: url).load()
+    #expect(!loaded.costUsageEnabled)
+    #expect(!loaded.agentSessionsEnabled)
+    #expect(loaded.showCreditsAndExtraUsage)
+    #expect(loaded.includeFileOnlySessions)
+}
+
+@Test func `the opt-in preferences round-trip through the store`() throws {
+    let url = tempFile()
+    let store = LinuxSettingsStore(fileURL: url)
+    var settings = LinuxSettings()
+    settings.costUsageEnabled = true
+    settings.agentSessionsEnabled = true
+    try store.save(settings)
+    #expect(store.load() == settings)
+}

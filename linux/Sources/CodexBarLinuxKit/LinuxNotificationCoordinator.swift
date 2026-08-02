@@ -39,6 +39,16 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
         }
     }
 
+    /// Upstream forecasts these two providers and no others — see the guard in
+    /// `UsageStore.handlePredictivePaceWarningTransitions`. The Linux port ran
+    /// for every provider, which is how OpenCode Go — three windows and a
+    /// relative TTL — became the loudest source of warnings.
+    private static let forecastableProviders: Set<UsageProvider> = [.codex, .claude]
+
+    /// The session and weekly lanes, matching upstream's two candidates.
+    /// `tertiary` and `extraRateWindows` carry quotas with no pace model.
+    private static let forecastableWindowIDs: Set<String> = ["primary", "secondary"]
+
     private let sender: any DesktopNotificationSending
     private let lock = NSLock()
     private var predictiveWarnings = Set<PredictiveWarningKey>()
@@ -104,20 +114,6 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
         }
     }
 
-    public func consumePredictivePace(
-        record: ProviderRefreshRecord,
-        provider: ProviderDescriptor,
-        settings: LinuxSettings,
-        pace: UsagePace) async
-    {
-        await self.consumePredictivePace(
-            record: record,
-            provider: provider,
-            settings: settings,
-            windowID: "primary",
-            pace: pace)
-    }
-
     public func testNotification(settings: LinuxSettings) async {
         await self.send(
             summary: "CodexBar notification test",
@@ -125,13 +121,16 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
             settings: settings)
     }
 
-    private func consumePredictivePace(
+    public func consumePredictivePace(
         record: ProviderRefreshRecord,
         provider: ProviderDescriptor,
         settings: LinuxSettings,
-        windowID: String,
+        windowID: String = "primary",
         pace: UsagePace) async
     {
+        guard Self.forecastableProviders.contains(provider.id),
+              Self.forecastableWindowIDs.contains(windowID)
+        else { return }
         guard settings.predictivePaceWarningsEnabled,
               !pace.willLastToReset,
               let etaSeconds = pace.etaSeconds,

@@ -256,6 +256,53 @@ private actor NotificationOutcomeSequence {
     #expect((await recorder.values()).count == 1)
 }
 
+@Test func `predictive pace warnings are confined to the two forecastable providers`() async {
+    let recorder = SentNotificationRecorder()
+    let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(recorder: recorder))
+    let pace = UsagePace.historical(
+        expectedUsedPercent: 40,
+        actualUsedPercent: 80,
+        etaSeconds: 300,
+        willLastToReset: false,
+        runOutProbability: nil)
+
+    // Upstream forecasts only Codex and Claude. OpenCode Go reports three
+    // windows and a relative TTL, so it was the loudest of the providers that
+    // should never have been in this path at all.
+    for provider in [UsageProvider.opencodego, .zai, .kimi] {
+        await coordinator.consumePredictivePace(
+            record: notificationRecord(
+                resetAt: Date(timeIntervalSince1970: 10_000),
+                account: "fixture@example.test",
+                providerID: provider.rawValue),
+            provider: ProviderDescriptorRegistry.descriptor(for: provider),
+            settings: LinuxSettings(),
+            pace: pace)
+    }
+
+    #expect(await recorder.values().isEmpty)
+}
+
+@Test func `predictive pace warnings cover only the session and weekly lanes`() async {
+    let recorder = SentNotificationRecorder()
+    let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(recorder: recorder))
+    let pace = UsagePace.historical(
+        expectedUsedPercent: 40,
+        actualUsedPercent: 80,
+        etaSeconds: 300,
+        willLastToReset: false,
+        runOutProbability: nil)
+
+    await coordinator.consumePredictivePace(
+        record: notificationRecord(resetAt: Date(timeIntervalSince1970: 10_000), account: "fixture@example.test"),
+        provider: notificationProvider(),
+        settings: LinuxSettings(),
+        windowID: "tertiary",
+        pace: pace)
+
+    #expect(await recorder.values().isEmpty)
+}
+
 @Test func `missing notification service never escapes the coordinator`() async {
     let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(
         recorder: SentNotificationRecorder(),
@@ -299,18 +346,25 @@ private func notificationProvider() -> ProviderDescriptor {
     ProviderDescriptorRegistry.descriptor(for: .claude)
 }
 
-private func notificationRecord(resetAt: Date, account: String) -> ProviderRefreshRecord {
+private func notificationRecord(
+    resetAt: Date,
+    account: String,
+    providerID: String = "claude") -> ProviderRefreshRecord
+{
     let window = RateWindow(
         usedPercent: 80,
         windowMinutes: 300,
         resetsAt: resetAt,
         resetDescription: nil)
+    // All three lanes are populated so a test asserting that a lane is skipped
+    // cannot pass merely because the window was absent.
     let snapshot = UsageSnapshot(
         primary: window,
-        secondary: nil,
+        secondary: window,
+        tertiary: window,
         updatedAt: Date(timeIntervalSince1970: 1),
         identity: ProviderIdentitySnapshot(
-            providerID: .claude,
+            providerID: UsageProvider(rawValue: providerID) ?? .claude,
             accountEmail: account,
             accountOrganization: nil,
             loginMethod: nil))
@@ -323,7 +377,7 @@ private func notificationRecord(resetAt: Date, account: String) -> ProviderRefre
         strategyKind: .localProbe)
     return ProviderRefreshRecord(
         view: ProviderView(
-            id: "claude",
+            id: providerID,
             displayName: "Claude",
             iconResourceName: "claude",
             accentColorHex: "#000000",

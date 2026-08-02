@@ -131,6 +131,13 @@ app.onActivate = {
 
     view.loadBundledUI()
     created.setChild(view.widgetPointer)
+    // Without this the popup is destroyed the moment it is closed, taking its
+    // web view with it, while `webView`, `bridge` and `window` above keep
+    // pointing at the freed GObjects — the next snapshot push then walks a
+    // dangling WebKitWebView and the process dies inside
+    // webkit_web_view_evaluate_javascript. The settings window has always set
+    // it for the same reason; the tray's own window never did.
+    created.setHideOnClose(true)
 
     let madeTray = TrayIndicator(
         id: "codexbar",

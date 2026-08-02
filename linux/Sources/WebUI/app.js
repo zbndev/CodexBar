@@ -50,21 +50,76 @@ function clampPercent(value) {
   return Math.max(0, Math.min(100, value));
 }
 
+/// Mirrors `UsageFormatter.resetLine`: same precedence, same wording, same
+/// localisation keys.
+///
+/// The old order let a provider's `resetDescription` win over the countdown even
+/// when a reset date was known, which had two consequences. The reset-time
+/// preference was silently ignored for every provider that ships a description,
+/// and the popup printed the description raw — for Claude that is a fragment
+/// scraped off the `claude` CLI ("Resets10pm(Europe/Moscow)"), sitting next to
+/// providers that showed a tidy line. Upstream normalises exactly this; the web
+/// layer simply never did.
 function formatReset(window) {
-  if (!window.resetsAt) return window.resetDescription || '';
-  const date = new Date(window.resetsAt);
-  if (state.display && state.display.resetTimesShowAbsolute) {
-    return `Resets ${date.toLocaleString()}`;
+  const date = window.resetsAt ? new Date(window.resetsAt) : null;
+  if (date && !Number.isNaN(date.getTime())) {
+    if (state.display && state.display.resetTimesShowAbsolute) {
+      return t('Resets %@', absoluteReset(date));
+    }
+    const countdown = resetCountdown(date);
+    return countdown === null ? t('Resets now') : t('Resets in %@', countdown);
   }
-  if (window.resetDescription) return window.resetDescription;
-  const remaining = date.getTime() - Date.now();
-  if (remaining <= 0) return t('Resetting');
-  const minutes = Math.floor(remaining / 60000);
-  const days = Math.floor(minutes / 1440);
-  const hours = Math.floor((minutes % 1440) / 60);
-  if (days > 0) return `Resets in ${days}d ${hours}h`;
-  if (hours > 0) return `Resets in ${hours}h ${minutes % 60}m`;
-  return `Resets in ${minutes}m`;
+
+  // No usable date: fall back to whatever the provider said, minus the verb it
+  // may already carry, so the line reads the same either way. The separator is
+  // optional because a scrape can arrive unspaced ("Resets10pm(…)") — the same
+  // shape ClaudeStatusProbe.cleanResetLine strips upstream.
+  const described = (window.resetDescription || '').trim();
+  if (!described) return '';
+  const body = described.replace(/^resets?\s*:?\s*/i, '');
+  if (!body) return t('Resets now');
+  const counted = body.match(/^in\s+(.+)$/i);
+  return counted ? t('Resets in %@', counted[1]) : t('Resets %@', body);
+}
+
+/// The remaining time, without the leading verb. Null means "now" — under a
+/// second left, where a countdown would read as `0m`.
+function resetCountdown(date) {
+  const seconds = Math.max(0, (date.getTime() - Date.now()) / 1000);
+  if (seconds < 1) return null;
+  const totalMinutes = Math.max(1, Math.ceil(seconds / 60));
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  if (days > 0) {
+    if (hours > 0) return `${days}d ${hours}h`;
+    if (minutes > 0) return `${days}d ${minutes}m`;
+    return `${days}d`;
+  }
+  if (hours > 0) {
+    if (minutes > 0) return `${hours}h ${minutes}m`;
+    return `${hours}h`;
+  }
+  return `${totalMinutes}m`;
+}
+
+/// Today drops the date, tomorrow says so, anything further carries both.
+function absoluteReset(date) {
+  const now = new Date();
+  const time = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (isSameDay(date, now)) return time;
+  const tomorrow = new Date(now.getTime());
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  if (isSameDay(date, tomorrow)) return t('reset_tomorrow_format', time);
+  return date.toLocaleString([], {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  });
+}
+
+function isSameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
 }
 
 /// Second-level precision is noise in a window that refreshes once a minute, so

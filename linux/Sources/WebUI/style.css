@@ -83,6 +83,18 @@ body {
   display: block;
 }
 
+/* Brand marks that paint themselves near-black vanish against the dark
+   background. They sit on a light chip instead of being inverted, so the brand
+   keeps its own colour. icons.js decides which icons get the class. */
+@media (prefers-color-scheme: dark) {
+  .provider-tab .icon.needs-backdrop {
+    box-sizing: border-box;
+    padding: 2px;
+    border-radius: 5px;
+    background: rgba(242, 242, 245, 0.90);
+  }
+}
+
 .provider-tab .label {
   max-width: 100%;
   overflow: hidden;

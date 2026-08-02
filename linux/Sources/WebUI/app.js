@@ -85,8 +85,7 @@ function renderStrip() {
     if (provider.iconSVG) {
       const holder = document.createElement('span');
       holder.className = 'icon';
-      // Icons ship with the app and are not user input.
-      holder.innerHTML = provider.iconSVG;
+      mountIcon(holder, provider.iconSVG);
       tab.appendChild(holder);
     }
 

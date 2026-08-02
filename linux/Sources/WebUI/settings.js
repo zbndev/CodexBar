@@ -75,9 +75,10 @@ function sidebarItem(id, title, iconSVG) {
   item.className = 'sidebar-item' + (state.selectedPane === id ? ' is-selected' : '');
   if (iconSVG) {
     const holder = document.createElement('span');
+    holder.className = 'icon';
     // Brand icons ship with the app and are not user input. They size in
     // em — never centre them with margin auto (M2 discovery).
-    holder.innerHTML = iconSVG;
+    mountIcon(holder, iconSVG);
     item.appendChild(holder);
   }
   const label = document.createElement('span');
@@ -144,7 +145,8 @@ function renderRows(container, rows, providerID) {
         header.style.setProperty('--accent', row.accentColorHex);
         if (row.iconSVG) {
           const holder = document.createElement('span');
-          holder.innerHTML = row.iconSVG;
+          holder.className = 'icon';
+          mountIcon(holder, row.iconSVG);
           header.appendChild(holder);
         }
         const title = document.createElement('h1');

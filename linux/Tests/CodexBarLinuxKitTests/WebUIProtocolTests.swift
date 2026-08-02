@@ -25,6 +25,20 @@ import Testing
     #expect(WebUIProtocol.resource(forURI: "codexbar://ui/app.js") != nil)
 }
 
+// A script both pages <script src> must actually be served, or the page dies on
+// the first call into it. The directory is bundled wholesale, so a file that
+// exists in the source tree and is never served means the copy rule broke.
+@Test func `every script both pages load resolves and is declared by them`() throws {
+    for name in ["i18n.js", "icons.js"] {
+        #expect(WebUIProtocol.resource(forURI: "codexbar://ui/\(name)") != nil)
+        for page in ["index.html", "settings.html"] {
+            let resource = try #require(WebUIProtocol.resource(forURI: "codexbar://ui/\(page)"))
+            let html = String(decoding: resource.data, as: UTF8.self)
+            #expect(html.contains("src=\"\(name)\""))
+        }
+    }
+}
+
 @Test func `a missing file resolves to nil rather than crashing`() {
     #expect(WebUIProtocol.resource(forURI: "codexbar://ui/nope.js") == nil)
 }

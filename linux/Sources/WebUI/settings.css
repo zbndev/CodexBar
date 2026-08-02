@@ -56,7 +56,33 @@ body { display: flex; }
   cursor: pointer;
 }
 
-.sidebar-item svg { width: 16px; height: 16px; flex: 0 0 auto; display: block; }
+/* The icon holder — not the SVG — carries the box, so a backdrop can be added
+   inside it without changing the footprint and nudging every label along. */
+.sidebar-item .icon { width: 16px; height: 16px; }
+.pane-header .icon { width: 26px; height: 26px; }
+
+.sidebar-item .icon, .pane-header .icon {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  display: block;
+}
+
+.sidebar-item .icon svg, .pane-header .icon svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Brand marks that paint themselves near-black vanish against the dark
+   background. They sit on a light chip instead of being inverted, so the brand
+   keeps its own colour. icons.js decides which icons get the class. */
+@media (prefers-color-scheme: dark) {
+  .sidebar-item .icon.needs-backdrop, .pane-header .icon.needs-backdrop {
+    padding: 2px;
+    border-radius: 4px;
+    background: rgba(242, 242, 245, 0.90);
+  }
+}
 
 .sidebar-item.is-selected { background: var(--selected); }
 
@@ -65,7 +91,6 @@ body { display: flex; }
 #pane { flex: 1; overflow-y: auto; padding: 18px 22px 40px; }
 
 .pane-header { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-.pane-header svg { width: 26px; height: 26px; display: block; }
 .pane-header h1 { margin: 0; font-size: 19px; font-weight: 600; }
 
 .row {

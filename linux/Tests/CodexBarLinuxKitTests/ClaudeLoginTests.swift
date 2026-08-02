@@ -18,15 +18,20 @@ private let tokens = OAuthTokens(
     expiresIn: 3600,
     scope: "user:profile user:inference")
 
-@Test func `the claude profile uses the client id and endpoints core already knows`() {
+@Test func `the claude profile matches the current subscription oauth contract`() {
     let profile = ClaudeLogin.profile
     #expect(profile.providerID == "claude")
     #expect(profile.clientID == ClaudeOAuthCredentialsStore.defaultOAuthClientID)
     #expect(profile.tokenURL == "https://platform.claude.com/v1/oauth/token")
-    #expect(profile.authorizeURL == "https://platform.claude.com/oauth/authorize")
-    #expect(profile.scopes.contains("user:profile"))
-    #expect(profile.scopes.contains("user:inference"))
-    #expect(profile.scopes.contains("org:create_api_key"))
+    #expect(profile.authorizeURL == "https://claude.com/cai/oauth/authorize")
+    #expect(profile.scopes == [
+        "org:create_api_key",
+        "user:profile",
+        "user:inference",
+        "user:sessions:claude_code",
+        "user:mcp_servers",
+        "user:file_upload",
+    ])
 }
 
 @Test func `the claude profile matches what the installed cli actually sends`() {

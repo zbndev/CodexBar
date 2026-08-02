@@ -26,9 +26,16 @@ public enum ClaudeLogin {
     public static let profile = OAuthProviderProfile(
         providerID: "claude",
         clientID: ClaudeOAuthCredentialsStore.defaultOAuthClientID,
-        authorizeURL: "https://platform.claude.com/oauth/authorize",
+        authorizeURL: "https://claude.com/cai/oauth/authorize",
         tokenURL: "https://platform.claude.com/v1/oauth/token",
-        scopes: ["org:create_api_key", "user:profile", "user:inference"],
+        scopes: [
+            "org:create_api_key",
+            "user:profile",
+            "user:inference",
+            "user:sessions:claude_code",
+            "user:mcp_servers",
+            "user:file_upload",
+        ],
         redirect: .loopback(port: 0, path: "/callback"),
         tokenEncoding: .json,
         extraAuthorizeParameters: ["code": "true"],

@@ -30,6 +30,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case switchClaudeSwapAccount(number: Int)
     case refreshCost(provider: String)
     case testHook(event: HookEventType, provider: String)
+    case testNotification
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -113,6 +114,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .testHook(
                 event: try container.decode(HookEventType.self, forKey: .event),
                 provider: try container.decode(String.self, forKey: .provider))
+        case "testNotification":
+            self = .testNotification
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -196,6 +199,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode("testHook", forKey: .type)
             try container.encode(event, forKey: .event)
             try container.encode(provider, forKey: .provider)
+        case .testNotification:
+            try container.encode("testNotification", forKey: .type)
         }
     }
 }

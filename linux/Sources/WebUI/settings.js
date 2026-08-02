@@ -283,6 +283,11 @@ function renderRows(container, rows, providerID) {
   }
 
   if (state.selectedPane === 'hooks') renderHooks(container);
+  if (state.selectedPane === 'notifications') {
+    const test = pushButton('Send test notification');
+    test.addEventListener('click', () => handleAction('testNotification', null));
+    container.appendChild(actionRow(test));
+  }
 }
 
 /// A row holding only controls. Buttons need the same rhythm as labelled rows,
@@ -370,6 +375,7 @@ function handleAction(action, providerID) {
   if (action === 'openConfigFolder') bridge.send({ type: 'openConfigFolder' });
   if (action === 'login' && providerID) bridge.send({ type: 'startLogin', provider: providerID });
   if (action === 'cancelLogin' && providerID) bridge.send({ type: 'cancelLogin', provider: providerID });
+  if (action === 'testNotification') bridge.send({ type: 'testNotification' });
 }
 
 // An anchor that opens `url` in the real browser. The web view has no network

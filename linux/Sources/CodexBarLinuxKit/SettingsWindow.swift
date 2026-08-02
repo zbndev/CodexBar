@@ -22,6 +22,7 @@ public final class SettingsWindow: @unchecked Sendable {
         onRefresh: @escaping @Sendable () -> Void,
         onRefreshCost: @escaping @Sendable (String) -> Void,
         onTestHook: @escaping @Sendable (HookEventType, String) async -> [HookTestRuleSummary],
+        onTestNotification: @escaping @Sendable (LinuxSettings) async -> Void,
         onQuit: @escaping @Sendable () -> Void)
     {
         self.coordinator = coordinator
@@ -127,6 +128,8 @@ public final class SettingsWindow: @unchecked Sendable {
                         self?.bridge.send(.hookTest(HookTestPayload(results: results)))
                     }
                 }
+            case .testNotification:
+                Task { await onTestNotification(coordinator.linuxSettings()) }
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

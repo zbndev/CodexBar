@@ -22,6 +22,8 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private let onSnapshot: @Sendable (ProviderSnapshotPayload) -> Void
     private let onRefreshRecord: @Sendable (ProviderRefreshRecord) -> Void
     private let onUsageTransitions: @Sendable (ProviderRefreshRecord, [UsageTransition]) -> Void
+    private let notificationCoordinator: LinuxNotificationCoordinator?
+    private let notificationSettings: @Sendable () -> LinuxSettings
     private let configStore: CodexBarConfigStore
     private let transitionEngine: UsageTransitionEngine
     private let hookDispatcher: LinuxHookDispatcher
@@ -46,6 +48,8 @@ public final class LinuxUsageStore: @unchecked Sendable {
         },
         onRefreshRecord: @escaping @Sendable (ProviderRefreshRecord) -> Void = { _ in },
         onUsageTransitions: @escaping @Sendable (ProviderRefreshRecord, [UsageTransition]) -> Void = { _, _ in },
+        notificationCoordinator: LinuxNotificationCoordinator? = nil,
+        notificationSettings: @escaping @Sendable () -> LinuxSettings = { LinuxSettings() },
         transitionEngine: UsageTransitionEngine = UsageTransitionEngine(),
         hookDispatcher: LinuxHookDispatcher? = nil,
         onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void)
@@ -58,6 +62,8 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.fetch = fetch
         self.onRefreshRecord = onRefreshRecord
         self.onUsageTransitions = onUsageTransitions
+        self.notificationCoordinator = notificationCoordinator
+        self.notificationSettings = notificationSettings
         self.transitionEngine = transitionEngine
         self.hookDispatcher = hookDispatcher ?? LinuxHookDispatcher(hooksConfig: {
             (try? configStore.load())?.hooks ?? HooksConfig()
@@ -133,6 +139,19 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.refreshCost(record)
         self.onRefreshRecord(record)
         self.onUsageTransitions(record, transitions)
+        if let notificationCoordinator,
+           let providerID = UsageProvider(rawValue: record.view.id)
+        {
+            let provider = ProviderDescriptorRegistry.descriptor(for: providerID)
+            let settings = self.notificationSettings()
+            Task.detached {
+                await notificationCoordinator.consume(
+                    record: record,
+                    transitions: transitions,
+                    provider: provider,
+                    settings: settings)
+            }
+        }
         guard !transitions.isEmpty else { return }
         let dispatcher = self.hookDispatcher
         let providerID = record.view.id

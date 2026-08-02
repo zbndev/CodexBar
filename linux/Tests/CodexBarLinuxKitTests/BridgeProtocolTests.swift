@@ -386,6 +386,13 @@ private func fixtureProviderWithCostAndHistory() -> ProviderView {
         from: JSONEncoder().encode(BridgeEvent.hookTest(payload))) == .hookTest(payload))
 }
 
+@Test func `test notification command round-trips through JSON`() throws {
+    let command = BridgeCommand.testNotification
+    #expect(try JSONDecoder().decode(
+        BridgeCommand.self,
+        from: JSONEncoder().encode(command)) == command)
+}
+
 @Test func `a snapshot carrying cost and utilization history round-trips through JSON`() throws {
     let payload = ProviderSnapshotPayload(
         generatedAt: Date(timeIntervalSince1970: 0),

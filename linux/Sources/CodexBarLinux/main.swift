@@ -45,10 +45,16 @@ app.onActivate = {
             publishSettings()
         }
     })
+    let settingsStore = LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL())
+    let notificationCoordinator = LinuxNotificationCoordinator()
     let madeStore = LinuxUsageStore(
         kiloOrganizations: kiloOrganizations,
         onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } },
-        costStore: madeCostStore) { payload in
+        costStore: madeCostStore,
+        notificationCoordinator: notificationCoordinator,
+        notificationSettings: {
+            LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()).load()
+        }) { payload in
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
             var renderedPayload = payload.hidingPersonalInfo(settings.hidePersonalInfo)
@@ -68,7 +74,7 @@ app.onActivate = {
 
     let madeCoordinator = SettingsCoordinator(
         configStore: CodexBarConfigStore(),
-        settingsStore: LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()),
+        settingsStore: settingsStore,
         kiloOrganizations: kiloOrganizations,
         costViews: { madeCostStore.availableViews() },
         onChange: {
@@ -112,6 +118,7 @@ app.onActivate = {
                 onRefresh: { madeStore.refreshAll() },
                 onRefreshCost: refreshCost,
                 onTestHook: { event, providerID in await madeStore.testHook(event: event, provider: providerID) },
+                onTestNotification: { settings in await notificationCoordinator.testNotification(settings: settings) },
                 onQuit: { MainLoopDispatch.onMainLoop { app.quit() } })
         }
         settingsWindow?.present()
@@ -152,7 +159,7 @@ app.onActivate = {
                .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
                .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
                .selectManagedCodexAccount, .refreshKiloOrganizations, .setKiloOrganizationEnabled,
-               .refreshClaudeSwap, .switchClaudeSwapAccount, .testHook:
+               .refreshClaudeSwap, .switchClaudeSwapAccount, .testHook, .testNotification:
             break
         case .quit:
             app.quit()

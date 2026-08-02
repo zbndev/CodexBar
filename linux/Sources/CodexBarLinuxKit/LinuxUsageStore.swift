@@ -75,13 +75,15 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) {
         let mode = UsageRefresher.sourceMode(for: descriptor.id, config: config)
         let providerConfig = config?.providers.first { $0.id == descriptor.id }
+        let settings = LinuxSettingsSnapshot.make(config: config)
         let refresher = self.refresher
         Task.detached { [weak self] in
             guard let self else { return }
             let result = await refresher.fetch(
                 descriptor: descriptor,
                 sourceMode: mode,
-                config: providerConfig)
+                config: providerConfig,
+                settings: settings)
             let view: ProviderView
             switch result {
             case let .success(fetched):

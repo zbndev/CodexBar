@@ -15,14 +15,34 @@ public struct UsageRefresher: Sendable {
     public func fetch(
         descriptor: ProviderDescriptor,
         sourceMode: ProviderSourceMode,
-        config: ProviderConfig? = nil) async -> Result<ProviderFetchResult, Error>
+        config: ProviderConfig? = nil,
+        settings: ProviderSettingsSnapshot? = nil) async -> Result<ProviderFetchResult, Error>
+    {
+        let context = Self.makeContext(
+            descriptor: descriptor,
+            sourceMode: sourceMode,
+            environment: Self.resolvedEnvironment(
+                base: self.environment,
+                provider: descriptor.id,
+                config: config),
+            settings: settings)
+
+        let outcome = await descriptor.fetchPlan.pipeline.fetch(
+            context: context,
+            provider: descriptor.id)
+        return outcome.result
+    }
+
+    /// Split out so a test can assert that a strategy accepts the context this
+    /// builds, rather than only that the pieces look right.
+    public static func makeContext(
+        descriptor: ProviderDescriptor,
+        sourceMode: ProviderSourceMode,
+        environment: [String: String],
+        settings: ProviderSettingsSnapshot?) -> ProviderFetchContext
     {
         let browserDetection = BrowserDetection()
-        let environment = Self.resolvedEnvironment(
-            base: self.environment,
-            provider: descriptor.id,
-            config: config)
-        let context = ProviderFetchContext(
+        return ProviderFetchContext(
             runtime: .app,
             sourceMode: sourceMode,
             includeCredits: true,
@@ -30,7 +50,7 @@ public struct UsageRefresher: Sendable {
             webDebugDumpHTML: false,
             verbose: false,
             env: environment,
-            settings: nil,
+            settings: settings,
             fetcher: UsageFetcher(environment: environment),
             claudeFetcher: ClaudeUsageFetcher(browserDetection: browserDetection),
             browserDetection: browserDetection,
@@ -38,11 +58,6 @@ public struct UsageRefresher: Sendable {
             // a single fetch, matching how the menu bar app and `serve` behave.
             persistsCLISessions: true,
             persistentCLISessionIdleWindow: 300)
-
-        let outcome = await descriptor.fetchPlan.pipeline.fetch(
-            context: context,
-            provider: descriptor.id)
-        return outcome.result
     }
 
     /// Folds the provider's stored config into the environment the strategies

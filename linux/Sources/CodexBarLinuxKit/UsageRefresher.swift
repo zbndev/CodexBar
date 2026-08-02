@@ -14,9 +14,14 @@ public struct UsageRefresher: Sendable {
 
     public func fetch(
         descriptor: ProviderDescriptor,
-        sourceMode: ProviderSourceMode) async -> Result<ProviderFetchResult, Error>
+        sourceMode: ProviderSourceMode,
+        config: ProviderConfig? = nil) async -> Result<ProviderFetchResult, Error>
     {
         let browserDetection = BrowserDetection()
+        let environment = Self.resolvedEnvironment(
+            base: self.environment,
+            provider: descriptor.id,
+            config: config)
         let context = ProviderFetchContext(
             runtime: .app,
             sourceMode: sourceMode,
@@ -24,9 +29,9 @@ public struct UsageRefresher: Sendable {
             webTimeout: 15,
             webDebugDumpHTML: false,
             verbose: false,
-            env: self.environment,
+            env: environment,
             settings: nil,
-            fetcher: UsageFetcher(environment: self.environment),
+            fetcher: UsageFetcher(environment: environment),
             claudeFetcher: ClaudeUsageFetcher(browserDetection: browserDetection),
             browserDetection: browserDetection,
             // The GUI is long-lived, so warm CLI helper sessions may outlive
@@ -38,6 +43,36 @@ public struct UsageRefresher: Sendable {
             context: context,
             provider: descriptor.id)
         return outcome.result
+    }
+
+    /// Folds the provider's stored config into the environment the strategies
+    /// actually read.
+    ///
+    /// Most credentials never reach a strategy as config: `ZaiSettingsReader`
+    /// looks at `Z_AI_API_KEY`, `KimiSettingsReader` at `KIMI_API_KEY`, and so
+    /// on. Core projects the saved `apiKey`, cookie header and enterprise host
+    /// onto those variables here — the same call the CLI makes before every
+    /// fetch. Skipping it makes every strategy report itself unavailable, and
+    /// the pipeline then fails the provider with `noAvailableStrategy`.
+    public static func resolvedEnvironment(
+        base: [String: String],
+        provider: UsageProvider,
+        config: ProviderConfig?) -> [String: String]
+    {
+        ProviderEnvironmentResolver.resolve(
+            base: base,
+            provider: provider,
+            config: config,
+            selectedAccount: self.activeTokenAccount(config))
+    }
+
+    /// The token account a fetch should authenticate as, or nil when the
+    /// provider stores none. `activeIndex` is clamped rather than trusted: it
+    /// is persisted alongside the list and can outlive a removal.
+    public static func activeTokenAccount(_ config: ProviderConfig?) -> ProviderTokenAccount? {
+        guard let data = config?.tokenAccounts, !data.accounts.isEmpty else { return nil }
+        let index = min(max(data.activeIndex, 0), data.accounts.count - 1)
+        return data.accounts[index]
     }
 
     /// The source mode to use for a provider: whatever the config pins, else auto.

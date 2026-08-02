@@ -194,6 +194,7 @@ function renderDetail() {
     empty.className = 'state';
     empty.textContent = t('No providers enabled.');
     detail.appendChild(empty);
+    renderAgentSessions(detail);
     return;
   }
 
@@ -217,6 +218,24 @@ function renderDetail() {
   meta.append(left, right);
   detail.appendChild(meta);
 
+  // The body returns early on four different states; the sessions list and the
+  // cost block belong under all of them, so they sit outside it.
+  renderProviderBody(detail, provider);
+  renderAgentSessions(detail);
+  renderCost(detail, provider);
+
+  if (provider.changelogURL) {
+    const changelog = document.createElement('button');
+    changelog.className = 'cost-refresh';
+    changelog.textContent = 'Changelog';
+    changelog.addEventListener('click', () => bridge.send({ type: 'openURL', url: provider.changelogURL }));
+    detail.appendChild(changelog);
+  }
+}
+
+/// Everything between the header and the sessions list: the status lines, or
+/// the usage windows when there is usage to show.
+function renderProviderBody(detail, provider) {
   if (provider.operationalStatus === 'unavailable') {
     const unavailable = document.createElement('p');
     unavailable.className = 'state is-error';
@@ -287,37 +306,21 @@ function renderDetail() {
 
     detail.appendChild(section);
   }
-
-  // One bounded line when nothing has been sampled yet — not one per window.
-  const hasHistory = (provider.history || []).some((series) =>
-    series.segments.some((segment) => segment.points.length > 0));
-  if (!hasHistory) {
-    const history = document.createElement('div');
-    history.className = 'history-chart';
-    CodexBarCharts.renderUtilizationChart(history, [], provider.accentColorHex);
-    detail.appendChild(history);
-  }
-
-  renderCost(detail, provider);
-
-  if (provider.changelogURL) {
-    const changelog = document.createElement('button');
-    changelog.className = 'cost-refresh';
-    changelog.textContent = 'Changelog';
-    changelog.addEventListener('click', () => bridge.send({ type: 'openURL', url: provider.changelogURL }));
-    detail.appendChild(changelog);
-  }
 }
 
-function renderAgentSessions() {
-  const section = document.getElementById('agent-sessions');
-  section.replaceChildren();
+/// Appended to the scrolling detail pane rather than sitting above it. As a
+/// sibling it had no horizontal padding, because `--pad-edge` is declared on
+/// `.detail`, and every appearance or disappearance shoved the pane below it —
+/// which happens whenever a session ages past the 30-minute file-only window.
+///
+/// A missing payload means the preference is off: Swift drops it there rather
+/// than sending an empty list.
+function renderAgentSessions(detail) {
   const payload = state.agentSessions;
-  if (!payload || (!payload.sessions.length && !payload.errorMessage)) {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
+  if (!payload || (!payload.sessions.length && !payload.errorMessage)) return;
+
+  const section = document.createElement('section');
+  section.className = 'agent-sessions';
 
   const heading = document.createElement('h2');
   heading.textContent = 'Agent Sessions';
@@ -358,6 +361,8 @@ function renderAgentSessions() {
     row.append(icon, status, copy);
     section.appendChild(row);
   }
+
+  detail.appendChild(section);
 }
 
 function relativeActivity(timestamp) {
@@ -471,7 +476,6 @@ function render() {
   renderActions();
   renderStrip();
   renderDetail();
-  renderAgentSessions();
 }
 
 window.addEventListener('DOMContentLoaded', () => {

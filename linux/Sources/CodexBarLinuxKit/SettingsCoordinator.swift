@@ -45,6 +45,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
             settings: settings,
             general: GeneralPaneCatalog.panes(settings: settings, hooks: hooks),
             providers: panes,
+            managedCodexAccounts: self.managedCodexAccountViews(config: config),
             hooks: hooks,
             localization: LocalizationCatalog.load(locale: settings.language))
     }
@@ -91,6 +92,28 @@ public final class SettingsCoordinator: @unchecked Sendable {
         config warnings: QuotaWarningConfig?) throws
     {
         try self.updateProvider(id: providerID) { $0.quotaWarnings = warnings }
+    }
+
+    public func selectManagedCodexAccount(id: UUID?) throws {
+        try self.updateProvider(id: UsageProvider.codex.rawValue) {
+            $0.codexActiveSource = id.map(CodexActiveSource.managedAccount) ?? .liveSystem
+        }
+    }
+
+    public func managedCodexAccountsDidChange() {
+        self.onChange()
+    }
+
+    private func managedCodexAccountViews(config: CodexBarConfig?) -> [ManagedCodexAccountView] {
+        let activeID: UUID? = if case let .managedAccount(id)? = config?.providerConfig(for: .codex)?.codexActiveSource {
+            id
+        } else {
+            nil
+        }
+        let store = FileManagedCodexAccountStore(
+            fileURL: LinuxManagedCodexAccountCoordinator.defaultStoreURL())
+        guard let accounts = try? store.loadAccounts() else { return [] }
+        return accounts.accounts.map { ManagedCodexAccountView(account: $0, isActive: $0.id == activeID) }
     }
 
     private func updateProvider(

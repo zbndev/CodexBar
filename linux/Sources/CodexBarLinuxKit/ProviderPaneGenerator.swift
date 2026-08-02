@@ -173,6 +173,10 @@ public enum ProviderPaneGenerator {
             rows.append(.tokenAccounts(providerID: descriptor.id.rawValue))
         }
 
+        if descriptor.id == .codex {
+            rows.append(.managedCodexAccounts(providerID: descriptor.id.rawValue))
+        }
+
         if ProviderPaneTraits.prioritizeExhaustedQuotaProviders.contains(descriptor.id) {
             rows.append(.toggle(
                 key: "antigravityPrioritizeExhaustedQuotas",

@@ -20,6 +20,10 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case updateQuotaWarnings(providerID: String, config: QuotaWarningConfig?)
     case startLogin(provider: String)
     case cancelLogin(provider: String)
+    case addManagedCodexAccount
+    case reauthenticateManagedCodexAccount(id: UUID)
+    case removeManagedCodexAccount(id: UUID)
+    case selectManagedCodexAccount(id: UUID?)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -76,6 +80,14 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .startLogin(provider: try container.decode(String.self, forKey: .provider))
         case "cancelLogin":
             self = .cancelLogin(provider: try container.decode(String.self, forKey: .provider))
+        case "addManagedCodexAccount":
+            self = .addManagedCodexAccount
+        case "reauthenticateManagedCodexAccount":
+            self = .reauthenticateManagedCodexAccount(id: try container.decode(UUID.self, forKey: .id))
+        case "removeManagedCodexAccount":
+            self = .removeManagedCodexAccount(id: try container.decode(UUID.self, forKey: .id))
+        case "selectManagedCodexAccount":
+            self = .selectManagedCodexAccount(id: try container.decodeIfPresent(UUID.self, forKey: .id))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -130,6 +142,17 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case let .cancelLogin(provider):
             try container.encode("cancelLogin", forKey: .type)
             try container.encode(provider, forKey: .provider)
+        case .addManagedCodexAccount:
+            try container.encode("addManagedCodexAccount", forKey: .type)
+        case let .reauthenticateManagedCodexAccount(id):
+            try container.encode("reauthenticateManagedCodexAccount", forKey: .type)
+            try container.encode(id, forKey: .id)
+        case let .removeManagedCodexAccount(id):
+            try container.encode("removeManagedCodexAccount", forKey: .type)
+            try container.encode(id, forKey: .id)
+        case let .selectManagedCodexAccount(id):
+            try container.encode("selectManagedCodexAccount", forKey: .type)
+            try container.encodeIfPresent(id, forKey: .id)
         }
     }
 }

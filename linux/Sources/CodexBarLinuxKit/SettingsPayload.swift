@@ -7,6 +7,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
     public var settings: LinuxSettings
     public var general: [GeneralPane]
     public var providers: [ProviderPanePayload]
+    public var managedCodexAccounts: [ManagedCodexAccountView]
     public var hooks: HooksConfig
     public var localization: LocalizationPayload
 
@@ -15,6 +16,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         settings: LinuxSettings,
         general: [GeneralPane],
         providers: [ProviderPanePayload],
+        managedCodexAccounts: [ManagedCodexAccountView] = [],
         hooks: HooksConfig,
         localization: LocalizationPayload)
     {
@@ -23,6 +25,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         self.settings = settings
         self.general = general
         self.providers = providers
+        self.managedCodexAccounts = managedCodexAccounts
         self.hooks = hooks
     }
 }

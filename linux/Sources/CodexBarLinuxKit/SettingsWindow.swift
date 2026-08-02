@@ -31,6 +31,7 @@ public final class SettingsWindow: @unchecked Sendable {
         self.webView = WebView()
 
         let coordinatorBox = coordinator
+        let managedCodexAccounts = LinuxManagedCodexAccountCoordinator(settings: coordinator)
         self.bridge = Bridge(webView: self.webView) { command in
             let coordinator = coordinatorBox
             switch command {
@@ -75,6 +76,34 @@ public final class SettingsWindow: @unchecked Sendable {
             case let .cancelLogin(providerID):
                 guard let provider = UsageProvider(rawValue: providerID) else { return }
                 loginCoordinator.cancel(provider)
+            case .addManagedCodexAccount:
+                Task {
+                    do {
+                        _ = try await managedCodexAccounts.add()
+                    } catch {
+                        coordinator.reportError("Could not add the Codex account.")
+                    }
+                }
+            case let .reauthenticateManagedCodexAccount(id):
+                Task {
+                    do {
+                        _ = try await managedCodexAccounts.reauthenticate(id: id)
+                    } catch {
+                        coordinator.reportError("Could not reauthenticate the Codex account.")
+                    }
+                }
+            case let .removeManagedCodexAccount(id):
+                do {
+                    try managedCodexAccounts.remove(id: id)
+                } catch {
+                    coordinator.reportError("Could not remove the Codex account.")
+                }
+            case let .selectManagedCodexAccount(id):
+                do {
+                    try managedCodexAccounts.select(id: id)
+                } catch {
+                    coordinator.reportError("Could not select the Codex account.")
+                }
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

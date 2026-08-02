@@ -122,7 +122,9 @@ app.onActivate = {
             MainLoopDispatch.onMainLoop { presentSettings() }
         // Handled by the settings window's own bridge, never the popup's.
         case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
-             .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin:
+              .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
+              .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
+              .selectManagedCodexAccount:
             break
         case .quit:
             app.quit()

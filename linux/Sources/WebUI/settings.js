@@ -258,6 +258,9 @@ function renderRows(container, rows, providerID) {
       case 'tokenAccounts':
         renderTokenAccounts(container, row.providerID);
         break;
+      case 'managedCodexAccounts':
+        renderManagedCodexAccounts(container, row.providerID);
+        break;
       case 'quotaWarnings':
         renderQuotaWarnings(container, row.providerID);
         break;
@@ -482,6 +485,45 @@ function renderTokenAccounts(container, providerID) {
 
 function replaceTokenAccounts(providerID, data) {
   bridge.send({ type: 'replaceTokenAccounts', providerID, data });
+}
+
+function renderManagedCodexAccounts(container, providerID) {
+  if (providerID !== 'codex') return;
+  const accounts = state.payload.managedCodexAccounts || [];
+  container.appendChild(sectionTitle('Managed accounts'));
+
+  for (const account of accounts) {
+    const line = document.createElement('div');
+    line.className = 'row collection-row managed-codex-account';
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'active-managed-codex-account';
+    radio.checked = account.isActive;
+    radio.addEventListener('change', () => {
+      bridge.send({ type: 'selectManagedCodexAccount', id: account.id });
+    });
+    const label = document.createElement('span');
+    label.className = 'row-title';
+    label.textContent = account.workspaceLabel ? `${account.email} — ${account.workspaceLabel}` : account.email;
+    const reauthenticate = pushButton('Reauthenticate');
+    reauthenticate.addEventListener('click', () => {
+      bridge.send({ type: 'reauthenticateManagedCodexAccount', id: account.id });
+    });
+    const remove = pushButton(t('linux.settings.remove'), 'danger');
+    remove.addEventListener('click', () => {
+      bridge.send({ type: 'removeManagedCodexAccount', id: account.id });
+    });
+    line.append(radio, label, reauthenticate, remove);
+    container.appendChild(line);
+  }
+
+  const useSystem = pushButton('Use system account');
+  useSystem.addEventListener('click', () => {
+    bridge.send({ type: 'selectManagedCodexAccount', id: null });
+  });
+  const add = pushButton('Add account', 'primary');
+  add.addEventListener('click', () => bridge.send({ type: 'addManagedCodexAccount' }));
+  container.appendChild(actionRow(useSystem, add));
 }
 
 function renderQuotaWarnings(container, providerID) {

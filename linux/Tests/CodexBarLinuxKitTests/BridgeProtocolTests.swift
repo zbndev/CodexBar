@@ -150,6 +150,40 @@ import Testing
     #expect(try JSONDecoder().decode(BridgeCommand.self, from: cancelData) == cancel)
 }
 
+@Test func `managed Codex account commands round-trip through JSON`() throws {
+    let id = UUID()
+    let commands: [BridgeCommand] = [
+        .addManagedCodexAccount,
+        .reauthenticateManagedCodexAccount(id: id),
+        .removeManagedCodexAccount(id: id),
+        .selectManagedCodexAccount(id: id),
+        .selectManagedCodexAccount(id: nil),
+    ]
+    for command in commands {
+        #expect(try JSONDecoder().decode(
+            BridgeCommand.self,
+            from: JSONEncoder().encode(command)) == command)
+    }
+}
+
+@Test func `managed Codex account views round-trip inside settings payloads`() throws {
+    let account = ManagedCodexAccountView(
+        id: UUID(), email: "managed@example.test", workspaceLabel: "Fixture workspace", isActive: true)
+    let payload = SettingsPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        settings: LinuxSettings(),
+        general: [],
+        providers: [],
+        managedCodexAccounts: [account],
+        hooks: HooksConfig(),
+        localization: LocalizationCatalog.load(locale: "en"))
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    #expect(try decoder.decode(SettingsPayload.self, from: encoder.encode(payload)) == payload)
+}
+
 @Test func `the login progress event round trips`() throws {
     let event = BridgeEvent.loginProgress(
         provider: "copilot",

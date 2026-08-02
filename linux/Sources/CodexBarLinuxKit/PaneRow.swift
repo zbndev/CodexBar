@@ -72,6 +72,7 @@ public enum PaneRow: Codable, Equatable, Sendable {
     case link(title: String, url: String)
     case button(action: String, title: String)
     case tokenAccounts(providerID: String)
+    case managedCodexAccounts(providerID: String)
     case quotaWarnings(providerID: String)
 
     private enum CodingKeys: String, CodingKey {
@@ -129,6 +130,8 @@ public enum PaneRow: Codable, Equatable, Sendable {
                 title: try c.decode(String.self, forKey: .title))
         case "tokenAccounts":
             self = .tokenAccounts(providerID: try c.decode(String.self, forKey: .providerID))
+        case "managedCodexAccounts":
+            self = .managedCodexAccounts(providerID: try c.decode(String.self, forKey: .providerID))
         case "quotaWarnings":
             self = .quotaWarnings(providerID: try c.decode(String.self, forKey: .providerID))
         case let unknown:
@@ -187,6 +190,9 @@ public enum PaneRow: Codable, Equatable, Sendable {
             try c.encode(title, forKey: .title)
         case let .tokenAccounts(providerID):
             try c.encode("tokenAccounts", forKey: .kind)
+            try c.encode(providerID, forKey: .providerID)
+        case let .managedCodexAccounts(providerID):
+            try c.encode("managedCodexAccounts", forKey: .kind)
             try c.encode(providerID, forKey: .providerID)
         case let .quotaWarnings(providerID):
             try c.encode("quotaWarnings", forKey: .kind)

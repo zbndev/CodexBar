@@ -51,6 +51,7 @@ app.onActivate = {
     let madeAgentSessionsStore = LinuxAgentSessionsStore(onChange: {
         MainLoopDispatch.onMainLoop {
             store?.republish()
+            store?.codingActivityDidChange()
         }
     })
     let madeStore = LinuxUsageStore(
@@ -60,6 +61,8 @@ app.onActivate = {
         notificationCoordinator: notificationCoordinator,
         notificationSettings: {
             LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()).load()
+        }, lastCodingActivityAt: {
+            madeAgentSessionsStore.lastCodingActivityAt
         }) { payload in
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
@@ -205,6 +208,7 @@ app.onActivate = {
                 created.hide()
             } else {
                 madeAgentSessionsStore.setPopupOpen(true)
+                madeStore.popupOpened()
                 created.present()
                 // Only on the opening half of the toggle.
                 if madeCoordinator.linuxSettings().refreshOnOpen {

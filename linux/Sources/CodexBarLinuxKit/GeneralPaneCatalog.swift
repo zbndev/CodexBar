@@ -190,6 +190,8 @@ public enum GeneralPaneCatalog {
     private static func refreshTitle(_ interval: RefreshInterval) -> String {
         switch interval {
         case .manual: "Manual"
+        case .adaptive: "Adaptive"
+        case .adaptiveAgentAware: "Adaptive (agent-aware)"
         case .oneMinute: "Every minute"
         case .twoMinutes: "Every 2 minutes"
         case .fiveMinutes: "Every 5 minutes"

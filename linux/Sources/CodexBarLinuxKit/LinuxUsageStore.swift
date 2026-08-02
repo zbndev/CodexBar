@@ -32,6 +32,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private let historyStore: LinuxPlanHistoryStore?
     private let costStore: LinuxCostStore?
     private var defaultHistoryStore: LinuxPlanHistoryStore?
+    private var refreshScheduler: LinuxRefreshScheduler?
 
     public init(
         configStore: CodexBarConfigStore = CodexBarConfigStore(),
@@ -52,6 +53,20 @@ public final class LinuxUsageStore: @unchecked Sendable {
         notificationSettings: @escaping @Sendable () -> LinuxSettings = { LinuxSettings() },
         transitionEngine: UsageTransitionEngine = UsageTransitionEngine(),
         hookDispatcher: LinuxHookDispatcher? = nil,
+        clock: @escaping @Sendable () -> Date = { Date() },
+        powerState: @escaping @Sendable () -> LinuxPowerState = { LinuxPowerState.current() },
+        lastCodingActivityAt: @escaping @Sendable () -> Date? = { nil },
+        sleep: @escaping @Sendable (Duration) async -> Bool = { duration in
+            do {
+                try await Task.sleep(for: duration)
+                return true
+            } catch {
+                return false
+            }
+        },
+        refreshDiagnostic: @escaping @Sendable (LinuxAdaptiveRefreshPolicy.Decision) -> Void = {
+            print("\($0.reason.rawValue) \($0.delay.components.seconds)s")
+        },
         onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void)
     {
         self.configStore = configStore
@@ -69,6 +84,13 @@ public final class LinuxUsageStore: @unchecked Sendable {
             (try? configStore.load())?.hooks ?? HooksConfig()
         })
         self.onSnapshot = onSnapshot
+        self.refreshScheduler = LinuxRefreshScheduler(
+            clock: clock,
+            powerState: powerState,
+            lastCodingActivityAt: lastCodingActivityAt,
+            refresh: { [weak self] in self?.refreshAll() },
+            sleep: sleep,
+            diagnostic: refreshDiagnostic)
         self.seedPlaceholders()
     }
 
@@ -165,8 +187,14 @@ public final class LinuxUsageStore: @unchecked Sendable {
     public func refreshAll() {
         let config = self.loadConfig()
         let descriptors = ProviderCatalog.enabledProviders(config: config)
-        for descriptor in descriptors {
-            self.startRefresh(descriptor: descriptor, config: config)
+        let refreshes = descriptors.map { self.startRefresh(descriptor: $0, config: config) }
+        guard !refreshes.isEmpty else {
+            self.refreshScheduler?.refreshCompleted()
+            return
+        }
+        Task.detached { [weak self] in
+            for refresh in refreshes { await refresh.value }
+            self?.refreshScheduler?.refreshCompleted()
         }
     }
 
@@ -174,25 +202,28 @@ public final class LinuxUsageStore: @unchecked Sendable {
         guard let provider = UsageProvider(rawValue: providerID) else { return }
         let config = self.loadConfig()
         let descriptor = ProviderDescriptorRegistry.descriptor(for: provider)
-        self.startRefresh(descriptor: descriptor, config: config)
+        let refresh = self.startRefresh(descriptor: descriptor, config: config)
+        Task.detached { [weak self] in
+            await refresh.value
+            self?.refreshScheduler?.refreshCompleted()
+        }
     }
 
     public func testHook(event: HookEventType, provider: String) async -> [HookTestRuleSummary] {
         await self.hookDispatcher.testHook(event: event, provider: provider)
     }
 
-    private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) {
+    private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) -> Task<Void, Never> {
         let mode = UsageRefresher.sourceMode(for: descriptor.id, config: config)
         let providerConfig = config?.providers.first { $0.id == descriptor.id }
         if descriptor.id == .kilo,
            self.kiloScopes(config: providerConfig).count > 1
         {
-            self.startKiloScopeRefresh(descriptor: descriptor, config: providerConfig)
-            return
+            return self.startKiloScopeRefresh(descriptor: descriptor, config: providerConfig)
         }
         let settings = LinuxSettingsSnapshot.make(config: config)
         let fetch = self.fetch
-        Task.detached { [weak self] in
+        return Task.detached { [weak self] in
             guard let self else { return }
             let outcome = await fetch(descriptor, mode, providerConfig, settings)
             let view: ProviderView
@@ -282,14 +313,17 @@ public final class LinuxUsageStore: @unchecked Sendable {
         return [.personal] + organizationScopes
     }
 
-    private func startKiloScopeRefresh(descriptor: ProviderDescriptor, config: ProviderConfig?) {
+    private func startKiloScopeRefresh(
+        descriptor: ProviderDescriptor,
+        config: ProviderConfig?) -> Task<Void, Never>
+    {
         let scopes = self.kiloScopes(config: config)
         let source = Self.kiloSourceMode(config?.source)
         let environment = ProcessInfo.processInfo.environment
         self.kiloOrganizations.beginRefresh()
         self.onKiloOrganizationsChange()
 
-        Task.detached { [weak self] in
+        return Task.detached { [weak self] in
             guard let self else { return }
             let token: KiloResolvedBearerToken
             do {
@@ -359,35 +393,24 @@ public final class LinuxUsageStore: @unchecked Sendable {
         }
     }
 
-    private var refreshTask: Task<Void, Never>?
-
-    /// Refreshes every `intervalSeconds` until stopped. A fixed interval is
-    /// enough for M2; adaptive scheduling arrives with the rest of the
-    /// refresh policy later.
     public func startPeriodicRefresh(intervalSeconds: Double = 300) {
-        self.stopPeriodicRefresh()
-        self.refreshTask = Task.detached { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(intervalSeconds))
-                guard !Task.isCancelled else { return }
-                self?.refreshAll()
-            }
-        }
+        self.refreshScheduler?.startFixed(intervalSeconds: intervalSeconds)
     }
 
     public func stopPeriodicRefresh() {
-        self.refreshTask?.cancel()
-        self.refreshTask = nil
+        self.refreshScheduler?.stop()
     }
 
-    /// Re-arms the timer from the user's choice. `startPeriodicRefresh`
-    /// already stops the previous task, so no timer chain can accumulate.
     public func applyRefreshInterval(_ interval: RefreshInterval) {
-        guard let seconds = interval.seconds else {
-            self.stopPeriodicRefresh()
-            return
-        }
-        self.startPeriodicRefresh(intervalSeconds: seconds)
+        self.refreshScheduler?.apply(interval)
+    }
+
+    public func popupOpened() {
+        self.refreshScheduler?.menuOpened()
+    }
+
+    public func codingActivityDidChange() {
+        self.refreshScheduler?.agentActivityChanged()
     }
 
     /// Rebuilds membership/order from the latest shared config. Existing
@@ -410,7 +433,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.onSnapshot(self.currentPayload())
         if refresh {
             for descriptor in descriptors {
-                self.startRefresh(descriptor: descriptor, config: config)
+                _ = self.startRefresh(descriptor: descriptor, config: config)
             }
         }
     }

@@ -227,6 +227,35 @@ private actor UsageOutcomeSequence {
     #expect(values == [.quotaLow(windowID: "primary", threshold: 20, remainingPercent: 19)])
 }
 
+@Test func `agent aware usage refresh applies the injected activity cap`() async throws {
+    // Given
+    let now = Date(timeIntervalSince1970: 1_000_000)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let configStore = CodexBarConfigStore(fileURL: directory.appendingPathComponent("config.json"))
+    try configStore.save(CodexBarConfig(providers: [ProviderConfig(id: .claude, enabled: true)]))
+    let recorder = RefreshSleepRecorder()
+    let store = LinuxUsageStore(
+        configStore: configStore,
+        fetch: { _, _, _, _ in transitionOutcome(remainingPercent: 100) },
+        clock: { now },
+        powerState: { .nominal },
+        lastCodingActivityAt: { now.addingTimeInterval(-5 * 60 + 1) },
+        sleep: recorder.sleep,
+        refreshDiagnostic: { _ in },
+        onSnapshot: { _ in })
+
+    // When
+    store.applyRefreshInterval(.adaptiveAgentAware)
+    let delay = await recorder.nextDelay()
+    await recorder.resumeNext()
+    let rearmedDelay = await recorder.nextDelay()
+
+    // Then
+    #expect(delay == .seconds(5 * 60))
+    #expect(rearmedDelay == .seconds(5 * 60))
+    store.stopPeriodicRefresh()
+}
+
 private func transitionOutcome(remainingPercent: Double) -> ProviderFetchOutcome {
     let usage = UsageSnapshot(
         primary: RateWindow(

@@ -7,11 +7,10 @@ public enum TrayLabelStyle: String, Codable, CaseIterable, Sendable {
     case highestPercent
 }
 
-/// Fixed intervals plus manual. The macOS `adaptive`/`adaptiveAgentAware`
-/// modes depend on `UsageStore` machinery that has no Linux port; adaptive
-/// scheduling is a later milestone.
 public enum RefreshInterval: String, Codable, CaseIterable, Sendable {
     case manual
+    case adaptive
+    case adaptiveAgentAware
     case oneMinute
     case twoMinutes
     case fiveMinutes
@@ -21,6 +20,7 @@ public enum RefreshInterval: String, Codable, CaseIterable, Sendable {
     public var seconds: Double? {
         switch self {
         case .manual: nil
+        case .adaptive, .adaptiveAgentAware: nil
         case .oneMinute: 60
         case .twoMinutes: 120
         case .fiveMinutes: 300

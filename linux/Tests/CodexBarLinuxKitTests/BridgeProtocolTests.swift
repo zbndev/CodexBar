@@ -159,3 +159,40 @@ import Testing
     #expect(String(decoding: data, as: UTF8.self).contains("\"loginProgress\""))
     #expect(try JSONDecoder().decode(BridgeEvent.self, from: data) == event)
 }
+
+@Test func `an undecodable message never echoes its body`() throws {
+    // The shape settings.js sends when the user pastes a cookie header, with
+    // one field the wrong type so decoding fails.
+    let secret = "sessionid=super-secret-value; csrftoken=also-secret"
+    let json = """
+        {"type":"updateProviderConfig","id":"perplexity",
+         "patch":{"cookieHeader":"\(secret)","enabled":"not-a-bool"}}
+        """
+    var thrown: (any Error)?
+    do {
+        _ = try JSONDecoder().decode(BridgeCommand.self, from: Data(json.utf8))
+        Issue.record("expected the malformed patch to fail decoding")
+    } catch {
+        thrown = error
+    }
+    let line = BridgeDiagnostics.undecodableMessage(json: json, error: try #require(thrown))
+    #expect(!line.contains(secret))
+    #expect(!line.contains("super-secret-value"))
+    #expect(!line.contains("cookieHeader"))
+    #expect(line.contains("type: updateProviderConfig"))
+}
+
+@Test func `a message whose type is not an identifier is reported unnamed`() {
+    // Nothing may reach the log by riding in on the type field.
+    let line = BridgeDiagnostics.undecodableMessage(
+        json: #"{"type":"sessionid=secret-value"}"#,
+        error: LoginError.cancelled)
+    #expect(line.contains("unnamed"))
+    #expect(!line.contains("secret-value"))
+}
+
+@Test func `unparseable json is reported unnamed`() {
+    let line = BridgeDiagnostics.undecodableMessage(json: "{not json", error: LoginError.cancelled)
+    #expect(line.contains("unnamed"))
+    #expect(!line.contains("not json"))
+}

@@ -69,7 +69,7 @@ public final class Bridge {
             self.handler(command)
         } catch {
             FileHandle.standardError.write(Data(
-                "codexbar: undecodable bridge message \(json): \(error)\n".utf8))
+                BridgeDiagnostics.undecodableMessage(json: json, error: error).utf8))
         }
     }
 

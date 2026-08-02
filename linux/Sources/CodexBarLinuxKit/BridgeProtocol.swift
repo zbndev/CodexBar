@@ -234,6 +234,35 @@ public struct LoginPhasePayload: Codable, Equatable, Sendable {
     }
 }
 
+/// Diagnostics for messages the bridge could not read.
+public enum BridgeDiagnostics {
+    /// Describes an undecodable command **without echoing its body**.
+    ///
+    /// `updateProviderConfig` carries a cookie header and `replaceTokenAccounts`
+    /// carries a token, so logging the raw JSON puts a live credential in
+    /// stderr the moment either one fails to decode. Only the command type
+    /// survives, and only when it looks like a type: a bare identifier of at
+    /// most 40 characters. Anything else is reported as unnamed rather than
+    /// trusted to be non-secret.
+    ///
+    /// `DecodingError` descriptions name coding paths and expected types, not
+    /// the offending values, so the error text is safe to include.
+    public static func undecodableMessage(json: String, error: any Error) -> String {
+        "codexbar: undecodable bridge message (\(self.typeLabel(json: json))): \(error)\n"
+    }
+
+    private static func typeLabel(json: String) -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)),
+              let type = (object as? [String: Any])?["type"] as? String,
+              type.count <= 40,
+              type.allSatisfy(\.isLetter)
+        else {
+            return "unnamed"
+        }
+        return "type: \(type)"
+    }
+}
+
 /// Escaping helpers for embedding JSON inside an evaluated script.
 public enum BridgeScriptEncoding {
     /// Wraps `value` as a JavaScript string literal, escaping backslashes and quotes.

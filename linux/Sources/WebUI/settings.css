@@ -103,6 +103,14 @@ body { display: flex; }
 .state { padding: 20px 0; color: var(--fg-dim); }
 .state.is-error { color: #d0453b; }
 
+.row-hint {
+  display: block;
+  padding: 6px 0 8px;
+  border-bottom: 0;
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
 .login-progress { color: var(--fg-dim); }
 .login-progress .login-progress-text { flex: 1; }
 .login-progress .device-code {

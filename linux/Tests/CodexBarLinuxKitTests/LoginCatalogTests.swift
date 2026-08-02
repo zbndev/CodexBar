@@ -46,10 +46,7 @@ import Testing
 }
 
 @Test func `every web-only provider has a login route`() {
-    for descriptor in ProviderDescriptorRegistry.all
-        where descriptor.fetchPlan.sourceModes.contains(.web)
-            && descriptor.fetchPlan.sourceModes.count == 1
-    {
+    for descriptor in ProviderDescriptorRegistry.webOnly {
         if case .none = LoginCatalog.route(for: descriptor.id) {
             Issue.record("\(descriptor.id.rawValue) is web-only but has no login route")
         }

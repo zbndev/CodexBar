@@ -113,7 +113,7 @@ private final class TestFlag: @unchecked Sendable {
             switch row {
             case let .toggle(key, _, _): key
             case let .picker(key, _, _, _, _): key
-            case let .field(key, _, _, _, _): key
+            case let .field(key, _, _, _, _, _): key
             default: nil
             }
         }

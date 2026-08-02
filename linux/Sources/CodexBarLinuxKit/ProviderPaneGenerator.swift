@@ -24,6 +24,9 @@ public enum ProviderPaneGenerator {
     {
         let metadata = descriptor.metadata
         let modes = descriptor.fetchPlan.sourceModes
+        // The per-provider words the descriptor cannot supply. nil means
+        // "render exactly what M3 rendered".
+        let copy = ProviderCopy.entry(for: descriptor.id)
         var rows: [PaneRow] = []
 
         rows.append(.header(
@@ -69,6 +72,7 @@ public enum ProviderPaneGenerator {
                 title: "API key",
                 value: config?.apiKey ?? "",
                 secure: true,
+                placeholder: copy?.placeholder,
                 visibleWhen: nil))
         }
         if ProviderPaneTraits.secretKeyProviders.contains(descriptor.id) {
@@ -77,6 +81,7 @@ public enum ProviderPaneGenerator {
                 title: "Secret key",
                 value: config?.secretKey ?? "",
                 secure: true,
+                placeholder: nil,
                 visibleWhen: nil))
         }
 
@@ -94,7 +99,12 @@ public enum ProviderPaneGenerator {
                 title: "Cookie header",
                 value: config?.cookieHeader ?? "",
                 secure: true,
+                placeholder: copy?.placeholder,
                 visibleWhen: RowCondition(key: "cookieSource", equals: "manual")))
+            // Emitted once, here: the hint is about acquiring the session.
+            if let hint = copy?.hint {
+                rows.append(.hint(text: hint))
+            }
         }
 
         if ProviderPaneTraits.regionProviders.contains(descriptor.id) {
@@ -103,6 +113,7 @@ public enum ProviderPaneGenerator {
                 title: "Region",
                 value: config?.region ?? "",
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil))
         }
         if ProviderPaneTraits.workspaceProviders.contains(descriptor.id) {
@@ -111,6 +122,7 @@ public enum ProviderPaneGenerator {
                 title: "Workspace / deployment",
                 value: config?.workspaceID ?? "",
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil))
         }
         if ProviderPaneTraits.enterpriseHostProviders.contains(descriptor.id) {
@@ -119,6 +131,7 @@ public enum ProviderPaneGenerator {
                 title: "Enterprise host",
                 value: config?.enterpriseHost ?? "",
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil))
         }
         if ProviderPaneTraits.awsProfileProviders.contains(descriptor.id) {
@@ -135,6 +148,7 @@ public enum ProviderPaneGenerator {
                 title: "AWS profile",
                 value: config?.awsProfile ?? "",
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil))
         }
 
@@ -144,12 +158,14 @@ public enum ProviderPaneGenerator {
                 title: "Profile ID",
                 value: config?.deepseekProfileID ?? "",
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil))
             rows.append(.field(
                 key: "deepseekProfileScope",
                 title: "Profile scope",
                 value: config?.deepseekProfileScope ?? "",
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil))
         }
 
@@ -173,10 +189,17 @@ public enum ProviderPaneGenerator {
             ("Changelog", metadata.changelogURL),
         ]
         let resolved = links.compactMap { title, url in url.map { (title, $0) } }
-        if !resolved.isEmpty {
+        // A helper link whose URL the metadata already resolved is dropped
+        // rather than emitted twice (discovery 7).
+        var emitted = Set(resolved.map(\.1))
+        let helpers = (copy?.helperLinks ?? []).filter { emitted.insert($0.url).inserted }
+        if !resolved.isEmpty || !helpers.isEmpty {
             rows.append(.section(title: "Links"))
             for (title, url) in resolved {
                 rows.append(.link(title: title, url: url))
+            }
+            for link in helpers {
+                rows.append(.link(title: link.title, url: link.url))
             }
         }
 

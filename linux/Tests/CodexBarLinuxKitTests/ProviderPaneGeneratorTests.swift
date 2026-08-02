@@ -25,7 +25,7 @@ private func rows(
 @Test func `an api-capable provider gets an api key field`() {
     let pane = rows(for: .ollama)
     #expect(pane.contains(.field(
-        key: "apiKey", title: "API key", value: "", secure: true, visibleWhen: nil)))
+        key: "apiKey", title: "API key", value: "", secure: true, placeholder: nil, visibleWhen: nil)))
 }
 
 @Test func `a web-capable provider gets a cookie source picker and a manual-only header field`() {
@@ -45,6 +45,7 @@ private func rows(
         title: "Cookie header",
         value: "",
         secure: true,
+        placeholder: nil,
         visibleWhen: RowCondition(key: "cookieSource", equals: "manual"))))
 }
 
@@ -52,7 +53,7 @@ private func rows(
     let pane = rows(for: .elevenlabs) // api-token only
     #expect(!pane.contains { row in
         if case .picker(let key, _, _, _, _) = row { return key == "cookieSource" }
-        if case .field(let key, _, _, _, _) = row { return key == "cookieHeader" }
+        if case .field(let key, _, _, _, _, _) = row { return key == "cookieHeader" }
         return false
     })
 }
@@ -74,9 +75,9 @@ private func rows(
 
 @Test func `region-capable providers get a region field and others do not`() {
     #expect(rows(for: .minimax).contains(.field(
-        key: "region", title: "Region", value: "", secure: false, visibleWhen: nil)))
+        key: "region", title: "Region", value: "", secure: false, placeholder: nil, visibleWhen: nil)))
     #expect(!rows(for: .claude).contains { row in
-        if case .field(let key, _, _, _, _) = row { return key == "region" }
+        if case .field(let key, _, _, _, _, _) = row { return key == "region" }
         return false
     })
 }
@@ -84,17 +85,17 @@ private func rows(
 @Test func `azure openai gets workspace and enterprise host fields`() {
     let pane = rows(for: .azureopenai)
     #expect(pane.contains(.field(
-        key: "workspaceID", title: "Workspace / deployment", value: "", secure: false, visibleWhen: nil)))
+        key: "workspaceID", title: "Workspace / deployment", value: "", secure: false, placeholder: nil, visibleWhen: nil)))
     #expect(pane.contains(.field(
-        key: "enterpriseHost", title: "Enterprise host", value: "", secure: false, visibleWhen: nil)))
+        key: "enterpriseHost", title: "Enterprise host", value: "", secure: false, placeholder: nil, visibleWhen: nil)))
 }
 
 @Test func `bedrock gets a secret key and aws profile fields`() {
     let pane = rows(for: .bedrock)
     #expect(pane.contains(.field(
-        key: "secretKey", title: "Secret key", value: "", secure: true, visibleWhen: nil)))
+        key: "secretKey", title: "Secret key", value: "", secure: true, placeholder: nil, visibleWhen: nil)))
     #expect(pane.contains(.field(
-        key: "awsProfile", title: "AWS profile", value: "", secure: false, visibleWhen: nil)))
+        key: "awsProfile", title: "AWS profile", value: "", secure: false, placeholder: nil, visibleWhen: nil)))
     #expect(pane.contains { row in
         if case .picker(let key, _, _, _, _) = row { return key == "awsAuthMode" }
         return false
@@ -104,11 +105,11 @@ private func rows(
 @Test func `doubao gets both access and secret key fields`() {
     let pane = rows(for: .doubao)
     #expect(pane.contains { row in
-        if case .field(let key, _, _, _, _) = row { return key == "apiKey" }
+        if case .field(let key, _, _, _, _, _) = row { return key == "apiKey" }
         return false
     })
     #expect(pane.contains { row in
-        if case .field(let key, _, _, _, _) = row { return key == "secretKey" }
+        if case .field(let key, _, _, _, _, _) = row { return key == "secretKey" }
         return false
     })
 }
@@ -132,7 +133,7 @@ private func rows(
     let pane = rows(for: .deepseek)
     for key in ["deepseekProfileID", "deepseekProfileScope"] {
         #expect(pane.contains { row in
-            if case .field(let rowKey, _, _, _, _) = row { return rowKey == key }
+            if case .field(let rowKey, _, _, _, _, _) = row { return rowKey == key }
             return false
         })
     }
@@ -145,7 +146,7 @@ private func rows(
             switch row {
             case let .toggle(key, _, _): key
             case let .picker(key, _, _, _, _): key
-            case let .field(key, _, _, _, _): key
+            case let .field(key, _, _, _, _, _): key
             default: nil
             }
         })

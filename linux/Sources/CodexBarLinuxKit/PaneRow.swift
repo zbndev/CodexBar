@@ -62,7 +62,12 @@ public enum PaneRow: Codable, Equatable, Sendable {
     case header(displayName: String, subtitle: String?, iconSVG: String?, accentColorHex: String)
     case toggle(key: String, title: String, value: Bool)
     case picker(key: String, title: String, options: [PaneOption], selected: String, visibleWhen: RowCondition?)
-    case field(key: String, title: String, value: String, secure: Bool, visibleWhen: RowCondition?)
+    case field(
+        key: String, title: String, value: String, secure: Bool,
+        placeholder: String?, visibleWhen: RowCondition?)
+    /// A line of guidance under the field it follows. Text only — it carries
+    /// no key and no binding.
+    case hint(text: String)
     case info(title: String, value: String)
     case link(title: String, url: String)
     case button(action: String, title: String)
@@ -72,6 +77,7 @@ public enum PaneRow: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case kind
         case title, subtitle, key, value, options, selected, secure, url, action
+        case placeholder, text
         case displayName, iconSVG, accentColorHex, providerID, visibleWhen
     }
 
@@ -104,7 +110,11 @@ public enum PaneRow: Codable, Equatable, Sendable {
                 title: try c.decode(String.self, forKey: .title),
                 value: try c.decode(String.self, forKey: .value),
                 secure: try c.decode(Bool.self, forKey: .secure),
+                // Absent in payloads written before the copy table existed.
+                placeholder: try c.decodeIfPresent(String.self, forKey: .placeholder),
                 visibleWhen: try c.decodeIfPresent(RowCondition.self, forKey: .visibleWhen))
+        case "hint":
+            self = .hint(text: try c.decode(String.self, forKey: .text))
         case "info":
             self = .info(
                 title: try c.decode(String.self, forKey: .title),
@@ -152,13 +162,17 @@ public enum PaneRow: Codable, Equatable, Sendable {
             try c.encode(options, forKey: .options)
             try c.encode(selected, forKey: .selected)
             try c.encodeIfPresent(visibleWhen, forKey: .visibleWhen)
-        case let .field(key, title, value, secure, visibleWhen):
+        case let .field(key, title, value, secure, placeholder, visibleWhen):
             try c.encode("field", forKey: .kind)
             try c.encode(key, forKey: .key)
             try c.encode(title, forKey: .title)
             try c.encode(value, forKey: .value)
             try c.encode(secure, forKey: .secure)
+            try c.encodeIfPresent(placeholder, forKey: .placeholder)
             try c.encodeIfPresent(visibleWhen, forKey: .visibleWhen)
+        case let .hint(text):
+            try c.encode("hint", forKey: .kind)
+            try c.encode(text, forKey: .text)
         case let .info(title, value):
             try c.encode("info", forKey: .kind)
             try c.encode(title, forKey: .title)

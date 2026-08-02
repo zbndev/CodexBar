@@ -147,6 +147,7 @@ public enum GeneralPaneCatalog {
                 title: "Thresholds (%, comma-separated)",
                 value: settings.quotaWarningSessionThresholds.map(String.init).joined(separator: ","),
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil),
             .section(title: "Weekly window"),
             .toggle(
@@ -158,6 +159,7 @@ public enum GeneralPaneCatalog {
                 title: "Thresholds (%, comma-separated)",
                 value: settings.quotaWarningWeeklyThresholds.map(String.init).joined(separator: ","),
                 secure: false,
+                placeholder: nil,
                 visibleWhen: nil),
             .section(title: "Delivery"),
             .toggle(

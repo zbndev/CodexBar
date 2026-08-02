@@ -187,12 +187,20 @@ function renderRows(container, rows, providerID) {
           const input = document.createElement('input');
           input.type = row.secure ? 'password' : 'text';
           input.value = row.value;
+          input.placeholder = row.placeholder || '';
           input.autocomplete = 'off';
           input.addEventListener('change', () => {
             applyEdit(providerID, row.key, input.value);
           });
           return input;
         }));
+        break;
+      }
+      case 'hint': {
+        const line = document.createElement('div');
+        line.className = 'row row-hint';
+        line.textContent = row.text;
+        container.appendChild(line);
         break;
       }
       case 'info': {

@@ -32,8 +32,20 @@ public final class TrayIndicator: @unchecked Sendable {
     /// - Parameter connection: the session bus, from `GtkApplication.dbusConnection`.
     ///   Passing nil skips the dbusmenu registration — the icon still appears,
     ///   but its menu is invisible to non-GNOME hosts.
-    public init(id: String, iconName: String, title: String, connection: OpaquePointer?) {
-        guard let indicator = app_indicator_new(id, iconName, APP_INDICATOR_CATEGORY_APPLICATION_STATUS) else {
+    /// - Parameter iconThemePath: a directory holding `<iconName>.png`, searched
+    ///   ahead of the icon theme. Nil resolves `iconName` against the theme
+    ///   alone, which is what a stock freedesktop name needs.
+    public init(
+        id: String,
+        iconName: String,
+        title: String,
+        connection: OpaquePointer?,
+        iconThemePath: String? = nil)
+    {
+        let created = iconThemePath.map {
+            app_indicator_new_with_path(id, iconName, APP_INDICATOR_CATEGORY_APPLICATION_STATUS, $0)
+        } ?? app_indicator_new(id, iconName, APP_INDICATOR_CATEGORY_APPLICATION_STATUS)
+        guard let indicator = created else {
             fatalError("app_indicator_new returned NULL")
         }
         self.indicator = OpaquePointer(indicator)

@@ -204,6 +204,58 @@ private actor NotificationOutcomeSequence {
     #expect((await recorder.values()).count == 2)
 }
 
+@Test func `a drifting reset time does not re-arm the predictive warning`() async {
+    let recorder = SentNotificationRecorder()
+    let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(recorder: recorder))
+    let pace = UsagePace.historical(
+        expectedUsedPercent: 40,
+        actualUsedPercent: 80,
+        etaSeconds: 300,
+        willLastToReset: false,
+        runOutProbability: nil)
+
+    // Measured from `~/.config/codexbar/history/opencodego.json`: a provider
+    // reporting a relative TTL recomputes `resetsAt` as `now + ttl` on every
+    // fetch, so 34 consecutive samples carried 34 distinct dates a fraction of
+    // a second apart. One cycle, one warning.
+    for drift in [0.0, 0.7, 0.4, 0.6, 0.5, 0.7, 0.4] {
+        await coordinator.consumePredictivePace(
+            record: notificationRecord(
+                resetAt: Date(timeIntervalSince1970: 10_000 + drift),
+                account: "fixture@example.test"),
+            provider: notificationProvider(),
+            settings: LinuxSettings(),
+            pace: pace)
+    }
+
+    #expect((await recorder.values()).count == 1)
+}
+
+@Test func `a minute-rounded reset time does not re-arm the predictive warning`() async {
+    let recorder = SentNotificationRecorder()
+    let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(recorder: recorder))
+    let pace = UsagePace.historical(
+        expectedUsedPercent: 40,
+        actualUsedPercent: 80,
+        etaSeconds: 300,
+        willLastToReset: false,
+        runOutProbability: nil)
+
+    // Claude's history oscillates its reset time by exactly ±60s as the
+    // provider re-rounds the same cycle. Two dates, still one cycle.
+    for offset in [0.0, 60.0, 0.0, 60.0, 0.0] {
+        await coordinator.consumePredictivePace(
+            record: notificationRecord(
+                resetAt: Date(timeIntervalSince1970: 10_000 + offset),
+                account: "fixture@example.test"),
+            provider: notificationProvider(),
+            settings: LinuxSettings(),
+            pace: pace)
+    }
+
+    #expect((await recorder.values()).count == 1)
+}
+
 @Test func `missing notification service never escapes the coordinator`() async {
     let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(
         recorder: SentNotificationRecorder(),

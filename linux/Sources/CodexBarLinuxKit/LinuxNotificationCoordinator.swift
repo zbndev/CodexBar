@@ -7,7 +7,36 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
         let providerID: String
         let accountDiscriminator: String
         let windowID: String
+        let windowMinutes: Int?
         let resetAt: Date
+
+        /// One provider account's one window — the lane a warning is scoped to,
+        /// independent of which reset cycle it was observed in.
+        func sharesLane(with other: Self) -> Bool {
+            self.providerID == other.providerID
+                && self.accountDiscriminator == other.accountDiscriminator
+                && self.windowID == other.windowID
+        }
+
+        /// Whether two observations describe the same reset cycle.
+        ///
+        /// Keying on the exact `resetAt` meant every refresh looked like a new
+        /// cycle for any provider that reports a *relative* TTL: `resetsAt` is
+        /// recomputed as `now + ttl` per fetch, so it lands a fraction of a
+        /// second away each time. Measured in
+        /// `~/.config/codexbar/history/opencodego.json`: 34 consecutive samples,
+        /// 34 distinct dates. Claude instead re-rounds the same cycle and
+        /// oscillates by exactly ±60s. Both re-armed the warning on every
+        /// refresh, so the notification repeated at the refresh interval.
+        ///
+        /// The tolerance is upstream's, from
+        /// `PredictivePaceWarningResetWindow.belongsToSameCycle`: half the
+        /// window, floored at five minutes.
+        func belongsToSameCycle(as other: Self) -> Bool {
+            guard self.windowMinutes == other.windowMinutes else { return false }
+            let tolerance = self.windowMinutes.map { max(TimeInterval($0 * 60) / 2, 300) } ?? 300
+            return abs(self.resetAt.timeIntervalSince(other.resetAt)) < tolerance
+        }
     }
 
     private let sender: any DesktopNotificationSending
@@ -108,7 +137,8 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
               let etaSeconds = pace.etaSeconds,
               etaSeconds > 0,
               let snapshot = record.snapshot,
-              let resetAt = Self.window(id: windowID, in: snapshot)?.resetsAt,
+              let window = Self.window(id: windowID, in: snapshot),
+              let resetAt = window.resetsAt,
               etaSeconds < resetAt.timeIntervalSince(snapshot.updatedAt)
         else { return }
 
@@ -116,8 +146,18 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
             providerID: record.view.id,
             accountDiscriminator: Self.accountDiscriminator(snapshot: snapshot, providerID: record.view.id),
             windowID: windowID,
+            windowMinutes: window.windowMinutes,
             resetAt: resetAt)
-        let shouldSend = self.lock.withLock { self.predictiveWarnings.insert(key).inserted }
+        // Replacing the lane's keys rather than accumulating them lets a drifting
+        // reset time follow the provider without re-alerting, and keeps the set
+        // from growing by one entry per refresh.
+        let shouldSend = self.lock.withLock { () -> Bool in
+            let lane = self.predictiveWarnings.filter { $0.sharesLane(with: key) }
+            let warnedThisCycle = lane.contains { $0.belongsToSameCycle(as: key) }
+            self.predictiveWarnings.subtract(lane)
+            self.predictiveWarnings.insert(key)
+            return !warnedThisCycle
+        }
         guard shouldSend else { return }
         await self.send(
             summary: "Projected quota exhaustion",

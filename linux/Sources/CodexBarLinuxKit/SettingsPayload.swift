@@ -15,6 +15,8 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
     /// groups and renders these. Already identity-scrubbed when the user's
     /// settings demand it — the web layer never re-adds detail.
     public var costs: [ProviderCostView]
+    public var diagnostics: LinuxDiagnosticsPayload
+    public var cache: LinuxCachePayload
     public var localization: LocalizationPayload
 
     public init(
@@ -27,6 +29,8 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         claudeSwap: ClaudeSwapPayload = ClaudeSwapPayload(executablePath: nil, accounts: [], errorMessage: nil),
         hooks: HooksConfig,
         costs: [ProviderCostView] = [],
+        diagnostics: LinuxDiagnosticsPayload = LinuxDiagnosticsPayload(diagnostics: []),
+        cache: LinuxCachePayload = LinuxCachePayload(),
         localization: LocalizationPayload)
     {
         self.localization = localization
@@ -39,5 +43,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         self.claudeSwap = claudeSwap
         self.hooks = hooks
         self.costs = costs
+        self.diagnostics = diagnostics
+        self.cache = cache
     }
 }

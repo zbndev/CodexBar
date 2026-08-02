@@ -17,6 +17,12 @@ extension Int {
     }
 }
 
+public enum ProviderOperationalStatus: String, Codable, Equatable, Sendable {
+    case unknown
+    case available
+    case unavailable
+}
+
 /// One usage window as the UI needs it.
 public struct ProviderWindowView: Codable, Equatable, Sendable {
     public var id: String
@@ -57,6 +63,8 @@ public struct ProviderView: Codable, Equatable, Sendable {
     public var isLoading: Bool
     public var dashboardURL: String?
     public var statusPageURL: String?
+    public var changelogURL: String?
+    public var operationalStatus: ProviderOperationalStatus
     /// The latest cost scan, when the provider supports one. Attached at
     /// payload time by `LinuxUsageStore`, never by the fetch path.
     public var cost: ProviderCostView?
@@ -79,6 +87,8 @@ public struct ProviderView: Codable, Equatable, Sendable {
         isLoading: Bool = false,
         dashboardURL: String? = nil,
         statusPageURL: String? = nil,
+        changelogURL: String? = nil,
+        operationalStatus: ProviderOperationalStatus = .unknown,
         cost: ProviderCostView? = nil,
         history: [UtilizationHistorySeries]? = nil)
     {
@@ -97,6 +107,8 @@ public struct ProviderView: Codable, Equatable, Sendable {
         self.isLoading = isLoading
         self.dashboardURL = dashboardURL
         self.statusPageURL = statusPageURL
+        self.changelogURL = changelogURL
+        self.operationalStatus = operationalStatus
         self.cost = cost
         self.history = history
     }

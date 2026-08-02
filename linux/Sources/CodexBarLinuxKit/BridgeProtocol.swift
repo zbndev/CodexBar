@@ -31,6 +31,14 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case refreshCost(provider: String)
     case testHook(event: HookEventType, provider: String)
     case testNotification
+    case refreshDiagnostics
+    case exportDiagnostics
+    case clearCostCache
+    case clearCookieCache
+    case refreshStorageFootprints
+    case openAbout
+    case openUsageDashboard
+    case openProviderStatus(provider: String?)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -46,6 +54,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case enabled
         case number
         case event
+        case pane
     }
 
     public init(from decoder: any Decoder) throws {
@@ -116,6 +125,22 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
                 provider: try container.decode(String.self, forKey: .provider))
         case "testNotification":
             self = .testNotification
+        case "refreshDiagnostics":
+            self = .refreshDiagnostics
+        case "exportDiagnostics":
+            self = .exportDiagnostics
+        case "clearCostCache":
+            self = .clearCostCache
+        case "clearCookieCache":
+            self = .clearCookieCache
+        case "refreshStorageFootprints":
+            self = .refreshStorageFootprints
+        case "openAbout":
+            self = .openAbout
+        case "openUsageDashboard":
+            self = .openUsageDashboard
+        case "openProviderStatus":
+            self = .openProviderStatus(provider: try container.decodeIfPresent(String.self, forKey: .provider))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -201,6 +226,23 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode(provider, forKey: .provider)
         case .testNotification:
             try container.encode("testNotification", forKey: .type)
+        case .refreshDiagnostics:
+            try container.encode("refreshDiagnostics", forKey: .type)
+        case .exportDiagnostics:
+            try container.encode("exportDiagnostics", forKey: .type)
+        case .clearCostCache:
+            try container.encode("clearCostCache", forKey: .type)
+        case .clearCookieCache:
+            try container.encode("clearCookieCache", forKey: .type)
+        case .refreshStorageFootprints:
+            try container.encode("refreshStorageFootprints", forKey: .type)
+        case .openAbout:
+            try container.encode("openAbout", forKey: .type)
+        case .openUsageDashboard:
+            try container.encode("openUsageDashboard", forKey: .type)
+        case let .openProviderStatus(provider):
+            try container.encode("openProviderStatus", forKey: .type)
+            try container.encodeIfPresent(provider, forKey: .provider)
         }
     }
 }

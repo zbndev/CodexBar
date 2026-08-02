@@ -213,6 +213,30 @@ public final class LinuxUsageStore: @unchecked Sendable {
         await self.hookDispatcher.testHook(event: event, provider: provider)
     }
 
+    public func applyStatusTransition(_ transition: ProviderStatusTransition) {
+        let providerID: String
+        let status: ProviderOperationalStatus
+        let usageTransition: UsageTransition
+        switch transition {
+        case let .unavailable(id):
+            providerID = id
+            status = .unavailable
+            usageTransition = .providerUnavailable
+        case let .recovered(id):
+            providerID = id
+            status = .available
+            usageTransition = .providerRecovered
+        }
+        self.lock.withLock {
+            self.views[providerID]?.operationalStatus = status
+        }
+        self.onSnapshot(self.currentPayload())
+        let dispatcher = self.hookDispatcher
+        Task.detached {
+            await dispatcher.dispatch(transitions: [usageTransition], provider: providerID)
+        }
+    }
+
     private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) -> Task<Void, Never> {
         let mode = UsageRefresher.sourceMode(for: descriptor.id, config: config)
         let providerConfig = config?.providers.first { $0.id == descriptor.id }

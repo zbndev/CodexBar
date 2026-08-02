@@ -21,6 +21,8 @@ public final class SettingsCoordinator: @unchecked Sendable {
     /// snapshot. A closure because the cost store lives next to the usage
     /// store in main.swift, not inside this coordinator.
     private let costViews: @Sendable () -> [ProviderCostView]
+    private let diagnosticsPayload: @Sendable () -> LinuxDiagnosticsPayload
+    private let cachePayload: @Sendable () -> LinuxCachePayload
     public let kiloOrganizations: KiloOrganizationsState
     public let claudeSwap: ClaudeSwapState
 
@@ -35,6 +37,10 @@ public final class SettingsCoordinator: @unchecked Sendable {
             try await KiloUsageFetcher.fetchOrganizations(apiKey: apiKey, environment: environment)
         },
         costViews: @escaping @Sendable () -> [ProviderCostView] = { [] },
+        diagnosticsPayload: @escaping @Sendable () -> LinuxDiagnosticsPayload = {
+            LinuxDiagnosticsPayload(diagnostics: [])
+        },
+        cachePayload: @escaping @Sendable () -> LinuxCachePayload = { LinuxCachePayload() },
         onChange: @escaping @Sendable () -> Void)
     {
         self.configStore = configStore
@@ -43,6 +49,8 @@ public final class SettingsCoordinator: @unchecked Sendable {
         self.kiloOrganizationFetch = kiloOrganizationFetch
         self.claudeSwapCoordinator = claudeSwapCoordinator
         self.costViews = costViews
+        self.diagnosticsPayload = diagnosticsPayload
+        self.cachePayload = cachePayload
         self.claudeSwap = claudeSwap ?? ClaudeSwapState()
         let config = try? configStore.load()
         let provider = config?.providerConfig(for: .kilo)
@@ -91,6 +99,8 @@ public final class SettingsCoordinator: @unchecked Sendable {
             claudeSwap: self.claudeSwap.payload(),
             hooks: hooks,
             costs: costs,
+            diagnostics: self.diagnosticsPayload(),
+            cache: self.cachePayload(),
             localization: LocalizationCatalog.load(locale: settings.language))
     }
 

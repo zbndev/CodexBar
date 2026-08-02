@@ -84,6 +84,7 @@ public enum GeneralPaneCatalog {
                     key: "debugMenuEnabled",
                     title: "Show debug settings",
                     value: settings.debugMenuEnabled),
+                .button(action: "refreshStorageFootprints", title: "Refresh storage footprints"),
             ]),
             GeneralPane(id: "hooks", title: "Hooks", rows: [
                 .toggle(key: "hooksEnabled", title: "Enable hooks", value: hooks.enabled),
@@ -93,6 +94,10 @@ public enum GeneralPaneCatalog {
                 .info(title: "Config file", value: CodexBarConfigStore.defaultURL().path),
                 .button(action: "openConfigFolder", title: "Open config folder"),
                 .button(action: "refresh", title: "Refresh all providers now"),
+                .button(action: "refreshDiagnostics", title: "Refresh diagnostics"),
+                .button(action: "exportDiagnostics", title: "Export diagnostics"),
+                .button(action: "clearCostCache", title: "Clear local cost cache"),
+                .button(action: "clearCookieCache", title: "Clear cookie cache"),
             ]),
         ].filter { $0.id != "debug" || settings.debugMenuEnabled }
     }

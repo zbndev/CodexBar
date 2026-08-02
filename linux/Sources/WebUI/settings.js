@@ -16,6 +16,10 @@ const bridge = {
     if (handler) handler(event);
     else console.warn('unhandled bridge event', event.type);
   },
+  selectPane(pane) {
+    state.selectedPane = pane;
+    render();
+  },
 };
 
 const handlers = {
@@ -283,6 +287,8 @@ function renderRows(container, rows, providerID) {
   }
 
   if (state.selectedPane === 'hooks') renderHooks(container);
+  if (state.selectedPane === 'debug') renderDiagnostics(container);
+  if (state.selectedPane === 'advanced') renderStorageFootprints(container);
   if (state.selectedPane === 'notifications') {
     const test = pushButton('Send test notification');
     test.addEventListener('click', () => handleAction('testNotification', null));
@@ -376,6 +382,49 @@ function handleAction(action, providerID) {
   if (action === 'login' && providerID) bridge.send({ type: 'startLogin', provider: providerID });
   if (action === 'cancelLogin' && providerID) bridge.send({ type: 'cancelLogin', provider: providerID });
   if (action === 'testNotification') bridge.send({ type: 'testNotification' });
+  if (action === 'refreshDiagnostics') bridge.send({ type: 'refreshDiagnostics' });
+  if (action === 'exportDiagnostics') bridge.send({ type: 'exportDiagnostics' });
+  if (action === 'clearCostCache') bridge.send({ type: 'clearCostCache' });
+  if (action === 'clearCookieCache') bridge.send({ type: 'clearCookieCache' });
+  if (action === 'refreshStorageFootprints') bridge.send({ type: 'refreshStorageFootprints' });
+}
+
+function renderDiagnostics(container) {
+  for (const item of state.payload.diagnostics.diagnostics) {
+    const attempts = item.attempts.map((attempt) =>
+      `${attempt.kind}: ${attempt.wasAvailable ? 'available' : (attempt.errorCategory || 'unavailable')}`).join(', ');
+    container.appendChild(labeledRow(item.provider, () => {
+      const value = document.createElement('span');
+      value.textContent = attempts || item.errorCategory || item.source;
+      return value;
+    }));
+  }
+  const cache = state.payload.cache;
+  if (cache.costCache) container.appendChild(labeledRow('Cost cache', () => cacheResult(cache.costCache)));
+  if (cache.cookieCache) container.appendChild(labeledRow('Cookie cache', () => cacheResult(cache.cookieCache)));
+}
+
+function renderStorageFootprints(container) {
+  for (const footprint of state.payload.cache.storage.footprints) {
+    container.appendChild(labeledRow(footprint.providerID, () => {
+      const value = document.createElement('span');
+      value.textContent = `${footprint.totalBytes} bytes`;
+      return value;
+    }));
+    for (const recommendation of footprint.recommendations) {
+      container.appendChild(labeledRow(recommendation.title, () => {
+        const value = document.createElement('span');
+        value.textContent = recommendation.consequence;
+        return value;
+      }));
+    }
+  }
+}
+
+function cacheResult(result) {
+  const value = document.createElement('span');
+  value.textContent = `${result.clearedCount} cleared, ${result.failedCount} failed`;
+  return value;
 }
 
 // An anchor that opens `url` in the real browser. The web view has no network

@@ -36,6 +36,7 @@ public enum ProviderCatalog {
             enabled: enabled,
             isLoading: true,
             dashboardURL: descriptor.metadata.dashboardURL,
-            statusPageURL: descriptor.metadata.statusPageURL)
+            statusPageURL: descriptor.metadata.statusPageURL,
+            changelogURL: descriptor.metadata.changelogURL)
     }
 }

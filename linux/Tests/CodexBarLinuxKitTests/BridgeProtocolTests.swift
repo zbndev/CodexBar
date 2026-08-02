@@ -404,6 +404,26 @@ private func fixtureProviderWithCostAndHistory() -> ProviderView {
         from: JSONEncoder().encode(command)) == command)
 }
 
+@Test func `diagnostics cache and footer commands round-trip through JSON`() throws {
+    let commands: [BridgeCommand] = [
+        .refreshDiagnostics,
+        .exportDiagnostics,
+        .clearCostCache,
+        .clearCookieCache,
+        .refreshStorageFootprints,
+        .testNotification,
+        .openAbout,
+        .openUsageDashboard,
+        .openProviderStatus(provider: "claude"),
+        .openProviderStatus(provider: nil),
+    ]
+    for command in commands {
+        #expect(try JSONDecoder().decode(
+            BridgeCommand.self,
+            from: JSONEncoder().encode(command)) == command)
+    }
+}
+
 @Test func `a snapshot carrying cost and utilization history round-trips through JSON`() throws {
     let payload = ProviderSnapshotPayload(
         generatedAt: Date(timeIntervalSince1970: 0),

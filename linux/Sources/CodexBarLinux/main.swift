@@ -12,6 +12,9 @@ nonisolated(unsafe) var bridge: Bridge?
 nonisolated(unsafe) var tray: TrayIndicator?
 nonisolated(unsafe) var store: LinuxUsageStore?
 nonisolated(unsafe) var costStore: LinuxCostStore?
+nonisolated(unsafe) var diagnosticsStore: LinuxDiagnosticsStore?
+nonisolated(unsafe) var cacheController: LinuxCacheController?
+nonisolated(unsafe) var statusPoller: ProviderStatusPoller?
 nonisolated(unsafe) var agentSessionsStore: LinuxAgentSessionsStore?
 nonisolated(unsafe) var settingsWindow: SettingsWindow?
 nonisolated(unsafe) var coordinator: SettingsCoordinator?
@@ -46,6 +49,8 @@ app.onActivate = {
             publishSettings()
         }
     })
+    let madeDiagnosticsStore = LinuxDiagnosticsStore()
+    let madeCacheController = LinuxCacheController()
     let settingsStore = LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL())
     let notificationCoordinator = LinuxNotificationCoordinator()
     let madeAgentSessionsStore = LinuxAgentSessionsStore(onChange: {
@@ -58,6 +63,17 @@ app.onActivate = {
         kiloOrganizations: kiloOrganizations,
         onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } },
         costStore: madeCostStore,
+        onRefreshRecord: { record in
+            guard let provider = UsageProvider(rawValue: record.view.id) else { return }
+            madeDiagnosticsStore.record(.init(
+                provider: provider,
+                descriptor: ProviderDescriptorRegistry.descriptor(for: provider),
+                outcome: record.outcome,
+                sourceMode: .auto,
+                settings: nil,
+                auth: ProviderDiagnosticAuthSummary(configured: false, modes: []),
+                appVersion: LinuxAppInfo.version))
+        },
         notificationCoordinator: notificationCoordinator,
         notificationSettings: {
             LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()).load()
@@ -88,6 +104,8 @@ app.onActivate = {
         settingsStore: settingsStore,
         kiloOrganizations: kiloOrganizations,
         costViews: { madeCostStore.availableViews() },
+        diagnosticsPayload: madeDiagnosticsStore.payload,
+        cachePayload: madeCacheController.payload,
         onChange: {
             // Everything here touches GTK/WebKit or store state the main loop
             // owns, so it must run there. The captured state is the top-level
@@ -97,13 +115,21 @@ app.onActivate = {
                 let settings = coordinator.linuxSettings()
                 store.applyRefreshInterval(settings.refreshInterval)
                 madeAgentSessionsStore.setIncludeFileOnlySessions(settings.includeFileOnlySessions)
-                store.reconcileProviders()
+                 store.reconcileProviders()
+                if settings.statusChecksEnabled { statusPoller?.start() } else { statusPoller?.stop() }
                 if settings.trayLabelStyle == .none { tray?.setLabel("") }
                 publishSettings()
             }
         })
 
     let madeLoginCoordinator = LoginCoordinator(application: app, settings: madeCoordinator)
+    let madeStatusPoller = ProviderStatusPoller(
+        statusChecksEnabled: {
+            LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()).load().statusChecksEnabled
+        },
+        onTransition: { transition in
+            MainLoopDispatch.onMainLoop { madeStore.applyStatusTransition(transition) }
+        })
     madeLoginCoordinator.onFinish = { _ in
         MainLoopDispatch.onMainLoop {
             madeCoordinator.republish()
@@ -119,6 +145,9 @@ app.onActivate = {
     }
 
     let shutdown: @Sendable () -> Void = {
+        madeStore.stopPeriodicRefresh()
+        madeStatusPoller.stop()
+        madeLoginCoordinator.cancelAll()
         Task {
             await madeAgentSessionsStore.stop()
             MainLoopDispatch.onMainLoop { app.quit() }
@@ -127,7 +156,7 @@ app.onActivate = {
 
     // One presenter shared by the popup's footer button and the tray menu:
     // the window is built lazily and reused, so its bridge survives a close.
-    let presentSettings: @Sendable () -> Void = {
+    let presentSettings: @Sendable (String?) -> Void = { pane in
         if settingsWindow == nil {
             settingsWindow = SettingsWindow(
                 application: app,
@@ -136,11 +165,38 @@ app.onActivate = {
                 registerSink: { settingsEventSink = $0 },
                 onRefresh: { madeStore.refreshAll() },
                 onRefreshCost: refreshCost,
-                onTestHook: { event, providerID in await madeStore.testHook(event: event, provider: providerID) },
-                onTestNotification: { settings in await notificationCoordinator.testNotification(settings: settings) },
+                 onTestHook: { event, providerID in await madeStore.testHook(event: event, provider: providerID) },
+                 onTestNotification: { settings in await notificationCoordinator.testNotification(settings: settings) },
+                onDiagnosticsCommand: { command in
+                    switch command {
+                    case .refreshDiagnostics:
+                        madeStore.republish()
+                    case .clearCostCache:
+                        Task { _ = await madeCacheController.clearCostCache(); publishSettings() }
+                    case .clearCookieCache:
+                        _ = madeCacheController.clearCookieCache()
+                        publishSettings()
+                    case .refreshStorageFootprints:
+                        let requests = ProviderDescriptorRegistry.all.map { descriptor in
+                            LinuxStorageScanRequest(
+                                provider: descriptor.id,
+                                paths: ProviderStoragePathCatalog.candidatePaths(
+                                    for: descriptor.id,
+                                    environment: ProcessInfo.processInfo.environment))
+                        }
+                        _ = madeCacheController.refreshStorageFootprints(requests)
+                        publishSettings()
+                    case .exportDiagnostics:
+                        if let data = try? madeDiagnosticsStore.exportData(), let window {
+                            DiagnosticsExportSaver(data: data).present(from: window)
+                        }
+                    default:
+                        break
+                    }
+                },
                 onQuit: shutdown)
         }
-        settingsWindow?.present()
+        settingsWindow?.present(pane: pane)
         madeCoordinator.republish()
     }
 
@@ -173,14 +229,43 @@ app.onActivate = {
         case .selectProvider:
             break
         case .openSettings:
-            MainLoopDispatch.onMainLoop { presentSettings() }
+            MainLoopDispatch.onMainLoop { presentSettings(nil) }
         // Handled by the settings window's own bridge, never the popup's.
         case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
                .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
                .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
                .selectManagedCodexAccount, .refreshKiloOrganizations, .setKiloOrganizationEnabled,
-               .refreshClaudeSwap, .switchClaudeSwapAccount, .testHook, .testNotification:
+                .refreshClaudeSwap, .switchClaudeSwapAccount, .testHook, .testNotification:
             break
+        case .refreshDiagnostics:
+            madeStore.republish()
+            publishSettings()
+        case .clearCostCache:
+            Task { _ = await madeCacheController.clearCostCache(); publishSettings() }
+        case .clearCookieCache:
+            _ = madeCacheController.clearCookieCache()
+            publishSettings()
+        case .refreshStorageFootprints:
+            let requests = ProviderDescriptorRegistry.all.map { descriptor in
+                LinuxStorageScanRequest(
+                    provider: descriptor.id,
+                    paths: ProviderStoragePathCatalog.candidatePaths(
+                        for: descriptor.id,
+                        environment: ProcessInfo.processInfo.environment))
+            }
+            _ = madeCacheController.refreshStorageFootprints(requests)
+            publishSettings()
+        case .exportDiagnostics:
+            if let data = try? madeDiagnosticsStore.exportData(), let window {
+                DiagnosticsExportSaver(data: data).present(from: window)
+            }
+        case .openAbout:
+            MainLoopDispatch.onMainLoop { presentSettings("about") }
+        case .openUsageDashboard:
+            MainLoopDispatch.onMainLoop { presentSettings("spend") }
+        case let .openProviderStatus(providerID):
+            let provider = providerID.flatMap { id in madeStore.currentPayload().providers.first { $0.id == id } }
+            if let url = provider?.statusPageURL { SystemBrowser.open(url) }
         case .quit:
             shutdown()
         }
@@ -218,7 +303,7 @@ app.onActivate = {
         }
     }
     madeTray.onRefresh = { madeStore.refreshAll() }
-    madeTray.onSettings = { MainLoopDispatch.onMainLoop { presentSettings() } }
+    madeTray.onSettings = { MainLoopDispatch.onMainLoop { presentSettings(nil) } }
     madeTray.onQuit = shutdown
 
     window = created
@@ -227,6 +312,9 @@ app.onActivate = {
     tray = madeTray
     store = madeStore
     costStore = madeCostStore
+    diagnosticsStore = madeDiagnosticsStore
+    cacheController = madeCacheController
+    statusPoller = madeStatusPoller
     agentSessionsStore = madeAgentSessionsStore
     coordinator = madeCoordinator
     loginCoordinator = madeLoginCoordinator
@@ -234,6 +322,7 @@ app.onActivate = {
     madeStore.applyRefreshInterval(madeCoordinator.linuxSettings().refreshInterval)
     madeAgentSessionsStore.setIncludeFileOnlySessions(madeCoordinator.linuxSettings().includeFileOnlySessions)
     madeAgentSessionsStore.start()
+    madeStatusPoller.start()
 }
 
 let status = app.run()

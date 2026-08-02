@@ -217,6 +217,13 @@ function renderDetail() {
   meta.append(left, right);
   detail.appendChild(meta);
 
+  if (provider.operationalStatus === 'unavailable') {
+    const unavailable = document.createElement('p');
+    unavailable.className = 'state is-error';
+    unavailable.textContent = 'Status page reports an unavailable service.';
+    detail.appendChild(unavailable);
+  }
+
   if (provider.errorMessage) {
     const error = document.createElement('p');
     error.className = 'state is-error';
@@ -292,6 +299,14 @@ function renderDetail() {
   }
 
   renderCost(detail, provider);
+
+  if (provider.changelogURL) {
+    const changelog = document.createElement('button');
+    changelog.className = 'cost-refresh';
+    changelog.textContent = 'Changelog';
+    changelog.addEventListener('click', () => bridge.send({ type: 'openURL', url: provider.changelogURL }));
+    detail.appendChild(changelog);
+  }
 }
 
 function renderAgentSessions() {
@@ -426,14 +441,13 @@ function costRow(label, value) {
   return row;
 }
 
-// The element ids and their handlers are unchanged from the button footer —
-// only the markup and the styling moved. No command is added here: Usage
-// Dashboard and Status Page would need the provider's URL plumbed into the
-// popup, which is a feature, not polish.
 const ACTIONS = [
   { id: 'refresh', label: 'Refresh' },
   { id: 'add-account', label: 'Add Account' },
+  { id: 'usage-dashboard', label: 'Usage Dashboard' },
+  { id: 'status-page', label: 'Status Page' },
   { id: 'settings', label: 'linux.settings.title' },
+  { id: 'about', label: 'About' },
   { id: 'quit', label: 'Quit' },
 ];
 
@@ -449,6 +463,7 @@ function renderActions() {
     const label = document.createElement('span');
     label.textContent = t(action.label);
     button.append(holder, label);
+    if (action.id === 'status-page') button.disabled = !selected() || !selected().statusPageURL;
   }
 }
 
@@ -468,8 +483,17 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('add-account').addEventListener('click', () => {
     bridge.send({ type: 'openSettings' });
   });
+  document.getElementById('usage-dashboard').addEventListener('click', () => {
+    bridge.send({ type: 'openUsageDashboard' });
+  });
+  document.getElementById('status-page').addEventListener('click', () => {
+    bridge.send({ type: 'openProviderStatus', provider: state.selectedID });
+  });
   document.getElementById('settings').addEventListener('click', () => {
     bridge.send({ type: 'openSettings' });
+  });
+  document.getElementById('about').addEventListener('click', () => {
+    bridge.send({ type: 'openAbout' });
   });
   document.getElementById('quit').addEventListener('click', () => {
     bridge.send({ type: 'quit' });

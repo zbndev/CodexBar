@@ -23,6 +23,7 @@ public final class SettingsWindow: @unchecked Sendable {
         onRefreshCost: @escaping @Sendable (String) -> Void,
         onTestHook: @escaping @Sendable (HookEventType, String) async -> [HookTestRuleSummary],
         onTestNotification: @escaping @Sendable (LinuxSettings) async -> Void,
+        onDiagnosticsCommand: @escaping @Sendable (BridgeCommand) -> Void,
         onQuit: @escaping @Sendable () -> Void)
     {
         self.coordinator = coordinator
@@ -130,6 +131,9 @@ public final class SettingsWindow: @unchecked Sendable {
                 }
             case .testNotification:
                 Task { await onTestNotification(coordinator.linuxSettings()) }
+            case .refreshDiagnostics, .exportDiagnostics, .clearCostCache, .clearCookieCache,
+                 .refreshStorageFootprints:
+                onDiagnosticsCommand(command)
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(
@@ -141,7 +145,7 @@ public final class SettingsWindow: @unchecked Sendable {
                 onRefresh()
             case .quit:
                 onQuit()
-            case .ready, .selectProvider, .openSettings:
+            case .ready, .selectProvider, .openSettings, .openAbout, .openUsageDashboard, .openProviderStatus:
                 break
             }
         }
@@ -158,8 +162,11 @@ public final class SettingsWindow: @unchecked Sendable {
         coordinator.onError = { [weak self] message in self?.bridge.send(.error(message: message)) }
     }
 
-    public func present() {
+    public func present(pane: String? = nil) {
         self.window.present()
+        if let pane {
+            self.webView.evaluate(javaScript: "window.__codexbar && window.__codexbar.selectPane(\(BridgeScriptEncoding.javaScriptStringLiteral(pane)));" )
+        }
     }
 
     public var isVisible: Bool {

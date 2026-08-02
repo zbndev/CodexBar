@@ -61,6 +61,15 @@ public final class LoginCoordinator: @unchecked Sendable {
         self.report(provider, .failed(message: LoginError.cancelled.message))
     }
 
+    public func cancelAll() {
+        let providers = Set(self.activeTasks.keys)
+            .union(self.cookieWindows.keys)
+            .union(self.externalProcesses.keys)
+        for provider in providers {
+            self.cancel(provider)
+        }
+    }
+
     // MARK: - Official external credential tools
 
     private func startExternalCredentialLogin(provider: UsageProvider, entry: ExternalCredentialLoginEntry) {

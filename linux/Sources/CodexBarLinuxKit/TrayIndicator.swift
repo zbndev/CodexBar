@@ -6,16 +6,33 @@ import Foundation
 /// Uses the GLib build of libayatana-appindicator, whose menu is a `GMenu`
 /// and whose actions are a `GSimpleActionGroup` — both GIO rather than
 /// widgets, which is what lets it coexist with GTK4 in one process.
-public final class TrayIndicator {
+///
+/// `@unchecked Sendable` for the same reason as `GtkWindow`: the instance is
+/// confined to the GTK main-loop thread. The dbusmenu server calls back into
+/// it from that same thread, through a `@Sendable` closure.
+public final class TrayIndicator: @unchecked Sendable {
     private let indicator: OpaquePointer
     private let actions: OpaquePointer
+    private var menuServer: TrayMenuServer?
 
     public var onShow: (@Sendable () -> Void)?
     public var onRefresh: (@Sendable () -> Void)?
     public var onSettings: (@Sendable () -> Void)?
     public var onQuit: (@Sendable () -> Void)?
 
-    public init(id: String, iconName: String, title: String) {
+    /// The tray menu, in display order. Ids are dbusmenu item ids and must be
+    /// stable across launches: hosts cache them between `LayoutUpdated` signals.
+    public static let menuItems: [TrayMenuItem] = [
+        TrayMenuItem(id: 1, label: "Open CodexBar", actionName: "show"),
+        TrayMenuItem(id: 2, label: "Refresh", actionName: "refresh"),
+        TrayMenuItem(id: 3, label: "Settings", actionName: "settings"),
+        TrayMenuItem(id: 4, label: "Quit", actionName: "quit"),
+    ]
+
+    /// - Parameter connection: the session bus, from `GtkApplication.dbusConnection`.
+    ///   Passing nil skips the dbusmenu registration — the icon still appears,
+    ///   but its menu is invisible to non-GNOME hosts.
+    public init(id: String, iconName: String, title: String, connection: OpaquePointer?) {
         guard let indicator = app_indicator_new(id, iconName, APP_INDICATOR_CATEGORY_APPLICATION_STATUS) else {
             fatalError("app_indicator_new returned NULL")
         }
@@ -31,13 +48,36 @@ public final class TrayIndicator {
 
         self.installActions()
         self.installMenu()
+
+        if let connection {
+            // The path libayatana exports and points its `Menu` property at.
+            let server = TrayMenuServer(
+                connection: connection,
+                objectPath: "/org/ayatana/appindicator/\(id)",
+                items: Self.menuItems,
+                activate: { [weak self] action in self?.activate(action) })
+            server.register()
+            self.menuServer = server
+        }
+    }
+
+    /// Runs the same closure a `GAction` activation would, so a dbusmenu click
+    /// and an `org.gtk.Actions` activation cannot diverge.
+    private func activate(_ action: String) {
+        switch action {
+        case "show": self.onShow?()
+        case "refresh": self.onRefresh?()
+        case "settings": self.onSettings?()
+        case "quit": self.onQuit?()
+        default: break
+        }
     }
 
     private func installActions() {
-        self.addAction(named: "show") { [weak self] in self?.onShow?() }
-        self.addAction(named: "refresh") { [weak self] in self?.onRefresh?() }
-        self.addAction(named: "settings") { [weak self] in self?.onSettings?() }
-        self.addAction(named: "quit") { [weak self] in self?.onQuit?() }
+        for item in Self.menuItems {
+            guard let name = item.actionName else { continue }
+            self.addAction(named: name) { [weak self] in self?.activate(name) }
+        }
         app_indicator_set_actions(
             UnsafeMutablePointer<AppIndicator>(self.indicator),
             UnsafeMutablePointer<GSimpleActionGroup>(self.actions))
@@ -78,10 +118,10 @@ public final class TrayIndicator {
         guard let menu = g_menu_new() else {
             fatalError("g_menu_new returned NULL")
         }
-        g_menu_append(menu, "Open CodexBar", "show")
-        g_menu_append(menu, "Refresh", "refresh")
-        g_menu_append(menu, "Settings", "settings")
-        g_menu_append(menu, "Quit", "quit")
+        for item in Self.menuItems {
+            guard let action = item.actionName else { continue }
+            g_menu_append(menu, item.label, action)
+        }
         app_indicator_set_menu(UnsafeMutablePointer<AppIndicator>(self.indicator), menu)
     }
 

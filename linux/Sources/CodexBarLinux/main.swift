@@ -125,7 +125,8 @@ app.onActivate = {
     let madeTray = TrayIndicator(
         id: "codexbar",
         iconName: "utilities-system-monitor",
-        title: "CodexBar")
+        title: "CodexBar",
+        connection: app.dbusConnection)
     madeTray.onShow = {
         MainLoopDispatch.onMainLoop {
             if created.isVisible {

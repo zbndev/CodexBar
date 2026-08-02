@@ -46,6 +46,16 @@ public final class GtkApplication: @unchecked Sendable {
         g_application_quit(UnsafeMutablePointer<_GApplication>(self.pointer))
     }
 
+    /// The session-bus connection GApplication owns.
+    ///
+    /// Available only after the application has registered on the bus — that
+    /// is, from `onActivate` onward. `libayatana-appindicator` publishes its
+    /// tray object on this very connection, which is what lets
+    /// `TrayMenuServer` add an interface to the library's object path.
+    public var dbusConnection: OpaquePointer? {
+        g_application_get_dbus_connection(UnsafeMutablePointer<_GApplication>(self.pointer))
+    }
+
     fileprivate final class ActivateBox {
         let owner: GtkApplication
         init(_ owner: GtkApplication) { self.owner = owner }

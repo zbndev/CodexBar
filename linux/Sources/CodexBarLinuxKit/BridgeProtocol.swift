@@ -11,6 +11,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case openURL(String)
     case quit
     case openSettings
+    case openProviderSettings(provider: String?)
     case settingsReady
     case updateProviderConfig(id: String, patch: ProviderConfigPatch)
     case updateSettings(LinuxSettings)
@@ -73,6 +74,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .quit
         case "openSettings":
             self = .openSettings
+        case "openProviderSettings":
+            self = .openProviderSettings(provider: try container.decodeIfPresent(String.self, forKey: .provider))
         case "settingsReady":
             self = .settingsReady
         case "updateProviderConfig":
@@ -167,6 +170,9 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode("quit", forKey: .type)
         case .openSettings:
             try container.encode("openSettings", forKey: .type)
+        case let .openProviderSettings(provider):
+            try container.encode("openProviderSettings", forKey: .type)
+            try container.encodeIfPresent(provider, forKey: .provider)
         case .settingsReady:
             try container.encode("settingsReady", forKey: .type)
         case let .updateProviderConfig(id, patch):

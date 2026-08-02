@@ -481,7 +481,7 @@ window.addEventListener('DOMContentLoaded', () => {
   // Deliberately the same command as Settings: the login buttons live in the
   // provider panes, and deep-linking one from the popup is M5 polish.
   document.getElementById('add-account').addEventListener('click', () => {
-    bridge.send({ type: 'openSettings' });
+    bridge.send({ type: 'openProviderSettings', provider: state.selectedID });
   });
   document.getElementById('usage-dashboard').addEventListener('click', () => {
     bridge.send({ type: 'openUsageDashboard' });

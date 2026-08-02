@@ -416,6 +416,7 @@ private func fixtureProviderWithCostAndHistory() -> ProviderView {
         .openUsageDashboard,
         .openProviderStatus(provider: "claude"),
         .openProviderStatus(provider: nil),
+        .openProviderSettings(provider: "claude"),
     ]
     for command in commands {
         #expect(try JSONDecoder().decode(

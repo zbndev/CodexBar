@@ -145,7 +145,8 @@ public final class SettingsWindow: @unchecked Sendable {
                 onRefresh()
             case .quit:
                 onQuit()
-            case .ready, .selectProvider, .openSettings, .openAbout, .openUsageDashboard, .openProviderStatus:
+            case .ready, .selectProvider, .openSettings, .openProviderSettings,
+                 .openAbout, .openUsageDashboard, .openProviderStatus:
                 break
             }
         }

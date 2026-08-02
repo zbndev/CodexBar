@@ -230,6 +230,10 @@ app.onActivate = {
             break
         case .openSettings:
             MainLoopDispatch.onMainLoop { presentSettings(nil) }
+        case let .openProviderSettings(providerID):
+            MainLoopDispatch.onMainLoop {
+                presentSettings(providerID.map { "provider:\($0)" })
+            }
         // Handled by the settings window's own bridge, never the popup's.
         case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
                .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,

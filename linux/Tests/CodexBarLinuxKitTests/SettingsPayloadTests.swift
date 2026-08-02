@@ -282,3 +282,47 @@ private func fixtureCostView() -> ProviderCostView {
         return false
     })
 }
+
+// MARK: - M5.16 opt-in preference rows
+
+private func editableRowKeys(_ settings: LinuxSettings, paneID: String? = nil) -> [String] {
+    GeneralPaneCatalog.panes(settings: settings, hooks: HooksConfig())
+        .filter { paneID == nil || $0.id == paneID }
+        .flatMap { pane in
+            pane.rows.compactMap { row -> String? in
+                switch row {
+                case let .toggle(key, _, _): key
+                case let .picker(key, _, _, _, _): key
+                case let .field(key, _, _, _, _, _): key
+                default: nil
+                }
+            }
+        }
+}
+
+@Test func `the cost estimate toggle lives in the spend pane`() {
+    #expect(editableRowKeys(LinuxSettings(), paneID: "spend").contains("costUsageEnabled"))
+}
+
+@Test func `the agent sessions toggle lives in the advanced pane`() {
+    #expect(editableRowKeys(LinuxSettings(), paneID: "advanced").contains("agentSessionsEnabled"))
+}
+
+@Test func `the file-only session row is hidden while agent sessions are off`() {
+    var off = LinuxSettings()
+    off.agentSessionsEnabled = false
+    var on = LinuxSettings()
+    on.agentSessionsEnabled = true
+
+    #expect(!editableRowKeys(off, paneID: "advanced").contains("includeFileOnlySessions"))
+    #expect(editableRowKeys(on, paneID: "advanced").contains("includeFileOnlySessions"))
+}
+
+@Test func `no settings key is offered by two different rows`() {
+    let keys = editableRowKeys(LinuxSettings())
+    let duplicates = Dictionary(grouping: keys, by: { $0 })
+        .filter { $0.value.count > 1 }
+        .keys
+        .sorted()
+    #expect(duplicates.isEmpty, "duplicated row keys: \(duplicates)")
+}

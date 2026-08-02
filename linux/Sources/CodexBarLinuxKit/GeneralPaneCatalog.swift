@@ -26,6 +26,10 @@ public enum GeneralPaneCatalog {
             self.generalPane(settings),
             GeneralPane(id: "spend", title: "Usage & Spend", rows: [
                 .toggle(
+                    key: "costUsageEnabled",
+                    title: "Show token cost estimates",
+                    value: settings.costUsageEnabled),
+                .toggle(
                     key: "showCreditsAndExtraUsage",
                     title: "Show credits and extra usage",
                     value: settings.showCreditsAndExtraUsage),
@@ -62,30 +66,8 @@ public enum GeneralPaneCatalog {
                     ],
                     selected: settings.resetTimesShowAbsolute ? "true" : "false",
                     visibleWhen: nil),
-                .toggle(
-                    key: "showCreditsAndExtraUsage",
-                    title: "Show credits and extra usage",
-                    value: settings.showCreditsAndExtraUsage),
             ]),
-            GeneralPane(id: "advanced", title: "Advanced", rows: [
-                .toggle(
-                    key: "hidePersonalInfo",
-                    title: "Hide personal information",
-                    value: settings.hidePersonalInfo),
-                .toggle(
-                    key: "includeFileOnlySessions",
-                    title: "Include file-only agent sessions",
-                    value: settings.includeFileOnlySessions),
-                .toggle(
-                    key: "providerStorageFootprintsEnabled",
-                    title: "Show provider storage usage",
-                    value: settings.providerStorageFootprintsEnabled),
-                .toggle(
-                    key: "debugMenuEnabled",
-                    title: "Show debug settings",
-                    value: settings.debugMenuEnabled),
-                .button(action: "refreshStorageFootprints", title: "Refresh storage footprints"),
-            ]),
+            self.advancedPane(settings),
             GeneralPane(id: "hooks", title: "Hooks", rows: [
                 .toggle(key: "hooksEnabled", title: "Enable hooks", value: hooks.enabled),
             ]),
@@ -180,6 +162,41 @@ public enum GeneralPaneCatalog {
                 title: "On-screen alert",
                 value: settings.quotaWarningOnScreenAlertEnabled),
         ])
+    }
+
+    private static func advancedPane(_ settings: LinuxSettings) -> GeneralPane {
+        var rows: [PaneRow] = [
+            .toggle(
+                key: "hidePersonalInfo",
+                title: "Hide personal information",
+                value: settings.hidePersonalInfo),
+            .toggle(
+                key: "agentSessionsEnabled",
+                title: "Show local agent sessions",
+                value: settings.agentSessionsEnabled),
+        ]
+        // `PaneRow.toggle` carries no `visibleWhen` — only `.picker` and
+        // `.field` do — and widening the case for one row would mean touching
+        // its Codable and settings.js too. The row configures a section that is
+        // switched off, so it is simply not emitted.
+        if settings.agentSessionsEnabled {
+            rows.append(.toggle(
+                key: "includeFileOnlySessions",
+                title: "Include file-only agent sessions",
+                value: settings.includeFileOnlySessions))
+        }
+        rows.append(contentsOf: [
+            .toggle(
+                key: "providerStorageFootprintsEnabled",
+                title: "Show provider storage usage",
+                value: settings.providerStorageFootprintsEnabled),
+            .toggle(
+                key: "debugMenuEnabled",
+                title: "Show debug settings",
+                value: settings.debugMenuEnabled),
+            .button(action: "refreshStorageFootprints", title: "Refresh storage footprints"),
+        ])
+        return GeneralPane(id: "advanced", title: "Advanced", rows: rows)
     }
 
     private static func aboutPane() -> GeneralPane {

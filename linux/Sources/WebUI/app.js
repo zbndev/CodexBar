@@ -1,4 +1,8 @@
-const state = { providers: [], selectedID: null, display: null, agentSessions: null };
+// `costOpen` is keyed by provider id and lives here rather than in settings: it
+// is window state, not a preference, and the popup is rebuilt each time it opens.
+const state = {
+  providers: [], selectedID: null, display: null, agentSessions: null, costOpen: {},
+};
 
 const bridge = {
   send(command) {
@@ -19,6 +23,7 @@ const handlers = {
       usageBarsShowUsed: true,
       resetTimesShowAbsolute: false,
       showCreditsAndExtraUsage: true,
+      costUsageEnabled: false,
       hidePersonalInfo: false,
     };
     state.providers = event.payload.providers;
@@ -373,16 +378,26 @@ function relativeActivity(timestamp) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-/// The expandable Cost block under the quota windows. Hidden by the same
-/// "credits and extra usage" preference as on macOS; identity hiding is
+/// The expandable Cost block under the quota windows. Opt-in through
+/// `costUsageEnabled` and off by default, matching upstream; identity hiding is
 /// enforced on the Swift side before anything reaches this page.
 function renderCost(detail, provider) {
   const cost = provider.cost;
   if (!cost) return;
-  if (state.display && !state.display.showCreditsAndExtraUsage) return;
+  // `costUsageEnabled`, not `showCreditsAndExtraUsage`: credits are a balance
+  // the provider reports, this is an estimate from local token counts, and on a
+  // subscription plan it bills nothing. Upstream keeps them separate too.
+  if (!state.display || !state.display.costUsageEnabled) return;
 
   const block = document.createElement('details');
   block.className = 'cost';
+  // The element is rebuilt on every snapshot, so `open` has to be restored or
+  // the block collapses itself once a minute. Keyed by provider, so expanding
+  // one does not expand the rest.
+  block.open = state.costOpen[provider.id] === true;
+  block.addEventListener('toggle', () => {
+    state.costOpen[provider.id] = block.open;
+  });
   const summary = document.createElement('summary');
   const title = document.createElement('span');
   title.className = 'cost-title';

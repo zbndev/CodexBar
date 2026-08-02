@@ -34,6 +34,18 @@ public struct OAuthProviderProfile: Equatable, Sendable {
     public let tokenEncoding: TokenEncoding
     public let extraAuthorizeParameters: [String: String]
 
+    /// Host written into a loopback `redirect_uri`. Ignored by `.hostedCode`.
+    ///
+    /// RFC 8252 §7.3 prefers the literal `127.0.0.1` because `localhost` can
+    /// resolve elsewhere, but a provider that string-matches its registered
+    /// URIs only accepts the spelling its own client sends — Claude's CLI binds
+    /// `127.0.0.1` yet puts `localhost` in the `redirect_uri`. So this is data.
+    public let loopbackHost: String
+
+    /// Sent in the token request body when the flow has one. Claude's CLI
+    /// echoes `state` there; providers that do not expect it ignore it.
+    public let echoesStateInTokenRequest: Bool
+
     public init(
         providerID: String,
         clientID: String,
@@ -42,8 +54,12 @@ public struct OAuthProviderProfile: Equatable, Sendable {
         scopes: [String],
         redirect: Redirect,
         tokenEncoding: TokenEncoding,
-        extraAuthorizeParameters: [String: String] = [:])
+        extraAuthorizeParameters: [String: String] = [:],
+        loopbackHost: String = "127.0.0.1",
+        echoesStateInTokenRequest: Bool = false)
     {
+        self.loopbackHost = loopbackHost
+        self.echoesStateInTokenRequest = echoesStateInTokenRequest
         self.providerID = providerID
         self.clientID = clientID
         self.authorizeURL = authorizeURL

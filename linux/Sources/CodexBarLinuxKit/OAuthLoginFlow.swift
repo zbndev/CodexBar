@@ -181,7 +181,8 @@ public struct OAuthLoginFlow: Sendable {
             profile: self.profile,
             code: code,
             verifier: codes.verifier,
-            redirectURI: redirectURI)
+            redirectURI: redirectURI,
+            state: codes.state)
         let (data, status) = try await self.transport(request)
         guard status == 200 else {
             throw LoginError.tokenRequestFailed(
@@ -200,7 +201,7 @@ public struct OAuthLoginFlow: Sendable {
         switch profile.redirect {
         case let .loopback(_, path):
             guard let loopbackPort else { throw LoginError.cancelled }
-            return "http://127.0.0.1:\(loopbackPort)\(path)"
+            return "http://\(profile.loopbackHost):\(loopbackPort)\(path)"
         case let .hostedCode(url):
             return url
         }
@@ -233,7 +234,8 @@ public struct OAuthLoginFlow: Sendable {
         profile: OAuthProviderProfile,
         code: String,
         verifier: String,
-        redirectURI: String) throws -> URLRequest
+        redirectURI: String,
+        state: String? = nil) throws -> URLRequest
     {
         guard let url = URL(string: profile.tokenURL) else {
             throw LoginError.malformedTokenResponse("bad token URL \(profile.tokenURL)")
@@ -242,13 +244,16 @@ public struct OAuthLoginFlow: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let fields = [
+        var fields = [
             "grant_type": "authorization_code",
             "client_id": profile.clientID,
             "code": code,
             "redirect_uri": redirectURI,
             "code_verifier": verifier,
         ]
+        if profile.echoesStateInTokenRequest, let state {
+            fields["state"] = state
+        }
 
         switch profile.tokenEncoding {
         case .json:

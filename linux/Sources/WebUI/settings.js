@@ -220,13 +220,12 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'button': {
-        const line = labeledRow(t(row.title), () => {
-          const button = document.createElement('button');
-          button.textContent = t(row.title);
-          button.addEventListener('click', () => handleAction(row.action, providerID));
-          return button;
-        });
-        container.appendChild(line);
+        // The title is the button's own text — putting it through labeledRow
+        // printed it twice, once as the row's label and once on the button.
+        const button = document.createElement('button');
+        button.textContent = t(row.title);
+        button.addEventListener('click', () => handleAction(row.action, providerID));
+        container.appendChild(actionRow(button));
         if (row.action === 'login' && providerID) renderLoginProgress(container, providerID);
         break;
       }
@@ -240,6 +239,15 @@ function renderRows(container, rows, providerID) {
   }
 
   if (state.selectedPane === 'hooks') renderHooks(container);
+}
+
+/// A row holding only controls. Buttons need the same rhythm as labelled rows,
+/// or they sit flush against the divider the row above them drew.
+function actionRow(...controls) {
+  const row = document.createElement('div');
+  row.className = 'row row-actions';
+  row.append(...controls);
+  return row;
 }
 
 function labeledRow(title, controlFactory) {
@@ -448,7 +456,7 @@ function renderQuotaWarnings(container, providerID) {
   clear.addEventListener('click', () => {
     bridge.send({ type: 'updateQuotaWarnings', providerID, config: null });
   });
-  container.appendChild(clear);
+  container.appendChild(actionRow(clear));
 }
 
 function renderHooks(container) {
@@ -507,7 +515,7 @@ function renderHooks(container) {
     });
     saveHooks(hooks);
   });
-  container.appendChild(add);
+  container.appendChild(actionRow(add));
 }
 
 function saveHooks(hooks) {

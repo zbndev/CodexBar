@@ -127,6 +127,43 @@ body { display: flex; }
   font: inherit;
 }
 
+/* A native select is taller than a text input at the same padding: it reserves
+   room for its own arrow and its own line box. Dropping the appearance and
+   drawing the chevron ourselves puts the two controls on the same rhythm. */
+.row select {
+  appearance: none;
+  padding-right: 26px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23888' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+}
+
+/* Every button in Settings was a bare native control — there was no rule for
+   them at all. They follow the popup footer's shape so the two windows read as
+   one application. */
+.row button {
+  flex: 0 0 auto;
+  padding: 5px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 6px;
+  background: var(--track);
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+.row button:hover { background: var(--selected); }
+.row button:disabled { opacity: 0.5; cursor: default; }
+.row button:disabled:hover { background: var(--track); }
+
+/* Rows that carry only controls: the top padding is what keeps a button off
+   the divider drawn by the row above it. */
+.row-actions {
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-bottom: 0;
+}
+
 .row a { color: var(--accent); text-decoration: none; }
 
 .section-title {

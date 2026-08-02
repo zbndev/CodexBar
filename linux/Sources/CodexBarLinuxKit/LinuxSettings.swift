@@ -65,6 +65,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
 
     // Advanced
     public var hidePersonalInfo: Bool
+    public var includeFileOnlySessions: Bool
     public var providerStorageFootprintsEnabled: Bool
     public var debugMenuEnabled: Bool
 
@@ -87,6 +88,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.quotaWarningSoundEnabled = true
         self.quotaWarningOnScreenAlertEnabled = false
         self.hidePersonalInfo = false
+        self.includeFileOnlySessions = true
         self.providerStorageFootprintsEnabled = false
         self.debugMenuEnabled = false
     }
@@ -130,6 +132,8 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.quotaWarningOnScreenAlertEnabled = try value(
             Bool.self, .quotaWarningOnScreenAlertEnabled, or: defaults.quotaWarningOnScreenAlertEnabled)
         self.hidePersonalInfo = try value(Bool.self, .hidePersonalInfo, or: defaults.hidePersonalInfo)
+        self.includeFileOnlySessions = try value(
+            Bool.self, .includeFileOnlySessions, or: defaults.includeFileOnlySessions)
         self.providerStorageFootprintsEnabled = try value(
             Bool.self, .providerStorageFootprintsEnabled, or: defaults.providerStorageFootprintsEnabled)
         self.debugMenuEnabled = try value(Bool.self, .debugMenuEnabled, or: defaults.debugMenuEnabled)

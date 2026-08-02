@@ -176,11 +176,22 @@ import Testing
     #expect(display.hidePersonalInfo)
 }
 
-@Test func `snapshot display preferences round-trip through JSON`() throws {
+@Test func `snapshot display preferences and agent sessions round-trip through JSON`() throws {
+    let activity = Date(timeIntervalSince1970: 1_800_000_000)
     let original = ProviderSnapshotPayload(
         generatedAt: Date(timeIntervalSince1970: 0),
         providers: [],
-        display: DisplayPreferences(settings: LinuxSettings()))
+        display: DisplayPreferences(settings: LinuxSettings()),
+        agentSessions: AgentSessionsPayload(
+            scannedAt: activity,
+            sessions: [AgentSessionView(
+                id: "fixture-session",
+                provider: "codex",
+                state: "active",
+                projectName: "fixture-project",
+                sessionName: "fixture-session",
+                lastActivityAt: activity)],
+            errorMessage: nil))
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
     let decoder = JSONDecoder()

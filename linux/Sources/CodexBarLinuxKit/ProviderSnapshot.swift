@@ -102,6 +102,45 @@ public struct ProviderView: Codable, Equatable, Sendable {
     }
 }
 
+/// Display-only local coding-session data. Scanner paths, process ids, and host
+/// names intentionally have no representation in this payload.
+public struct AgentSessionView: Codable, Equatable, Sendable {
+    public let id: String
+    public let provider: String
+    public let state: String
+    public let projectName: String?
+    public let sessionName: String?
+    public let lastActivityAt: Date
+
+    public init(
+        id: String,
+        provider: String,
+        state: String,
+        projectName: String?,
+        sessionName: String?,
+        lastActivityAt: Date)
+    {
+        self.id = id
+        self.provider = provider
+        self.state = state
+        self.projectName = projectName
+        self.sessionName = sessionName
+        self.lastActivityAt = lastActivityAt
+    }
+}
+
+public struct AgentSessionsPayload: Codable, Equatable, Sendable {
+    public let scannedAt: Date
+    public let sessions: [AgentSessionView]
+    public let errorMessage: String?
+
+    public init(scannedAt: Date, sessions: [AgentSessionView], errorMessage: String?) {
+        self.scannedAt = scannedAt
+        self.sessions = sessions
+        self.errorMessage = errorMessage
+    }
+}
+
 /// The whole UI state in one message.
 public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
     public var generatedAt: Date
@@ -110,17 +149,20 @@ public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
     /// along here — `SettingsPayload` reaches `settings.js` alone.
     public var localization: LocalizationPayload
     public var display: DisplayPreferences
+    public var agentSessions: AgentSessionsPayload?
 
     public init(
         generatedAt: Date,
         providers: [ProviderView],
         localization: LocalizationPayload = LocalizationCatalog.load(locale: nil),
-        display: DisplayPreferences = DisplayPreferences(settings: LinuxSettings()))
+        display: DisplayPreferences = DisplayPreferences(settings: LinuxSettings()),
+        agentSessions: AgentSessionsPayload? = nil)
     {
         self.generatedAt = generatedAt
         self.providers = providers
         self.localization = localization
         self.display = display
+        self.agentSessions = agentSessions
     }
 
     /// Identity hiding must be a data guarantee, not a rendering habit: with
@@ -134,6 +176,26 @@ public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
             provider.cost = provider.cost?.hidingPersonalInfo()
             return provider
         }
+        copy.agentSessions = self.agentSessions.map { payload in
+            AgentSessionsPayload(
+                scannedAt: payload.scannedAt,
+                sessions: payload.sessions.map { session in
+                    AgentSessionView(
+                        id: session.id,
+                        provider: session.provider,
+                        state: session.state,
+                        projectName: nil,
+                        sessionName: nil,
+                        lastActivityAt: session.lastActivityAt)
+                },
+                errorMessage: payload.errorMessage)
+        }
+        return copy
+    }
+
+    public func withAgentSessions(_ payload: AgentSessionsPayload) -> ProviderSnapshotPayload {
+        var copy = self
+        copy.agentSessions = payload
         return copy
     }
 }

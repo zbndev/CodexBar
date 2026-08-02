@@ -1,4 +1,4 @@
-const state = { providers: [], selectedID: null, display: null };
+const state = { providers: [], selectedID: null, display: null, agentSessions: null };
 
 const bridge = {
   send(command) {
@@ -22,6 +22,7 @@ const handlers = {
       hidePersonalInfo: false,
     };
     state.providers = event.payload.providers;
+    state.agentSessions = event.payload.agentSessions;
     if (!state.selectedID && state.providers.length > 0) {
       state.selectedID = state.providers[0].id;
     }
@@ -293,6 +294,65 @@ function renderDetail() {
   renderCost(detail, provider);
 }
 
+function renderAgentSessions() {
+  const section = document.getElementById('agent-sessions');
+  section.replaceChildren();
+  const payload = state.agentSessions;
+  if (!payload || (!payload.sessions.length && !payload.errorMessage)) {
+    section.hidden = true;
+    return;
+  }
+  section.hidden = false;
+
+  const heading = document.createElement('h2');
+  heading.textContent = 'Agent Sessions';
+  section.appendChild(heading);
+
+  if (payload.errorMessage) {
+    const error = document.createElement('p');
+    error.className = 'state is-error';
+    error.textContent = payload.errorMessage;
+    section.appendChild(error);
+  }
+
+  for (const session of payload.sessions) {
+    const row = document.createElement('div');
+    row.className = 'agent-session';
+    const provider = state.providers.find((candidate) => candidate.id === session.provider);
+    const icon = document.createElement('span');
+    icon.className = 'agent-session-icon icon';
+    if (provider && provider.iconSVG) mountIcon(icon, provider.iconSVG);
+    else icon.textContent = session.provider.slice(0, 1).toUpperCase();
+    const status = document.createElement('span');
+    status.className = `agent-session-state is-${session.state}`;
+    status.setAttribute('aria-label', session.state);
+    const copy = document.createElement('div');
+    copy.className = 'agent-session-copy';
+    const label = document.createElement('span');
+    label.className = 'agent-session-label';
+    if (state.display && state.display.hidePersonalInfo) {
+      label.hidden = true;
+    } else {
+      label.textContent = [session.projectName, session.sessionName]
+        .filter(Boolean).join(' · ') || 'Local session';
+    }
+    const activity = document.createElement('span');
+    activity.className = 'agent-session-activity tabular';
+    activity.textContent = relativeActivity(session.lastActivityAt);
+    copy.append(label, activity);
+    row.append(icon, status, copy);
+    section.appendChild(row);
+  }
+}
+
+function relativeActivity(timestamp) {
+  const seconds = Math.max(0, Math.round((Date.now() - new Date(timestamp).getTime()) / 1000));
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
 /// The expandable Cost block under the quota windows. Hidden by the same
 /// "credits and extra usage" preference as on macOS; identity hiding is
 /// enforced on the Swift side before anything reaches this page.
@@ -396,6 +456,7 @@ function render() {
   renderActions();
   renderStrip();
   renderDetail();
+  renderAgentSessions();
 }
 
 window.addEventListener('DOMContentLoaded', () => {

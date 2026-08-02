@@ -73,6 +73,10 @@ public enum GeneralPaneCatalog {
                     title: "Hide personal information",
                     value: settings.hidePersonalInfo),
                 .toggle(
+                    key: "includeFileOnlySessions",
+                    title: "Include file-only agent sessions",
+                    value: settings.includeFileOnlySessions),
+                .toggle(
                     key: "providerStorageFootprintsEnabled",
                     title: "Show provider storage usage",
                     value: settings.providerStorageFootprintsEnabled),

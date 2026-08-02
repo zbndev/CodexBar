@@ -201,6 +201,56 @@ body {
 
 .cost-refresh:hover { background: var(--accent-soft); }
 
+.agent-sessions {
+  margin: 0 0 var(--space-4);
+  border-top: 1px solid var(--divider);
+  padding-top: var(--space-3);
+}
+
+.agent-sessions h2 { margin: 0 0 var(--space-2); font: var(--text-heading); }
+
+.agent-session {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.agent-session-icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  display: grid;
+  place-items: center;
+  color: var(--fg-dim);
+  font: var(--text-small);
+}
+
+.agent-session-state {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-pill);
+  background: var(--fg-dim);
+}
+
+.agent-session-state.is-active { background: var(--accent); }
+
+.agent-session-copy {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex: 1;
+  font: var(--text-small);
+}
+
+.agent-session-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-session-activity { color: var(--fg-dim); }
+
 /* --- Action list ---------------------------------------------------------- */
 
 .actions {

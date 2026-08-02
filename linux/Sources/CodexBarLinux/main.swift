@@ -5,13 +5,14 @@ import Foundation
 // Top-level code is main-actor isolated, but the GTK callbacks below are plain
 // `@Sendable` closures invoked by the GTK main loop. These globals are confined
 // to the GTK thread by construction — nothing else ever touches them.
-nonisolated(unsafe) let app = GtkApplication(applicationID: "app.codexbar.linux")
+let app = GtkApplication(applicationID: "app.codexbar.linux")
 nonisolated(unsafe) var window: GtkWindow?
 nonisolated(unsafe) var webView: WebView?
 nonisolated(unsafe) var bridge: Bridge?
 nonisolated(unsafe) var tray: TrayIndicator?
 nonisolated(unsafe) var store: LinuxUsageStore?
 nonisolated(unsafe) var costStore: LinuxCostStore?
+nonisolated(unsafe) var agentSessionsStore: LinuxAgentSessionsStore?
 nonisolated(unsafe) var settingsWindow: SettingsWindow?
 nonisolated(unsafe) var coordinator: SettingsCoordinator?
 nonisolated(unsafe) var loginCoordinator: LoginCoordinator?
@@ -47,6 +48,11 @@ app.onActivate = {
     })
     let settingsStore = LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL())
     let notificationCoordinator = LinuxNotificationCoordinator()
+    let madeAgentSessionsStore = LinuxAgentSessionsStore(onChange: {
+        MainLoopDispatch.onMainLoop {
+            store?.republish()
+        }
+    })
     let madeStore = LinuxUsageStore(
         kiloOrganizations: kiloOrganizations,
         onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } },
@@ -57,7 +63,9 @@ app.onActivate = {
         }) { payload in
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
-            var renderedPayload = payload.hidingPersonalInfo(settings.hidePersonalInfo)
+            var renderedPayload = payload
+                .withAgentSessions(madeAgentSessionsStore.currentPayload())
+                .hidingPersonalInfo(settings.hidePersonalInfo)
             renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
             renderedPayload.display = DisplayPreferences(settings: settings)
             bridge?.send(.snapshot(renderedPayload))
@@ -85,6 +93,7 @@ app.onActivate = {
                 guard let coordinator, let store else { return }
                 let settings = coordinator.linuxSettings()
                 store.applyRefreshInterval(settings.refreshInterval)
+                madeAgentSessionsStore.setIncludeFileOnlySessions(settings.includeFileOnlySessions)
                 store.reconcileProviders()
                 if settings.trayLabelStyle == .none { tray?.setLabel("") }
                 publishSettings()
@@ -106,6 +115,13 @@ app.onActivate = {
         Task { await madeCostStore.refresh(providerID: providerID, config: config, forceRefresh: true) }
     }
 
+    let shutdown: @Sendable () -> Void = {
+        Task {
+            await madeAgentSessionsStore.stop()
+            MainLoopDispatch.onMainLoop { app.quit() }
+        }
+    }
+
     // One presenter shared by the popup's footer button and the tray menu:
     // the window is built lazily and reused, so its bridge survives a close.
     let presentSettings: @Sendable () -> Void = {
@@ -119,7 +135,7 @@ app.onActivate = {
                 onRefreshCost: refreshCost,
                 onTestHook: { event, providerID in await madeStore.testHook(event: event, provider: providerID) },
                 onTestNotification: { settings in await notificationCoordinator.testNotification(settings: settings) },
-                onQuit: { MainLoopDispatch.onMainLoop { app.quit() } })
+                onQuit: shutdown)
         }
         settingsWindow?.present()
         madeCoordinator.republish()
@@ -131,6 +147,7 @@ app.onActivate = {
             MainLoopDispatch.onMainLoop {
                 let settings = madeCoordinator.linuxSettings()
                 var renderedPayload = madeStore.currentPayload()
+                    .withAgentSessions(madeAgentSessionsStore.currentPayload())
                     .hidingPersonalInfo(settings.hidePersonalInfo)
                 renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
                 renderedPayload.display = DisplayPreferences(settings: settings)
@@ -162,7 +179,7 @@ app.onActivate = {
                .refreshClaudeSwap, .switchClaudeSwapAccount, .testHook, .testNotification:
             break
         case .quit:
-            app.quit()
+            shutdown()
         }
     }
 
@@ -184,8 +201,10 @@ app.onActivate = {
     madeTray.onShow = {
         MainLoopDispatch.onMainLoop {
             if created.isVisible {
+                madeAgentSessionsStore.setPopupOpen(false)
                 created.hide()
             } else {
+                madeAgentSessionsStore.setPopupOpen(true)
                 created.present()
                 // Only on the opening half of the toggle.
                 if madeCoordinator.linuxSettings().refreshOnOpen {
@@ -196,7 +215,7 @@ app.onActivate = {
     }
     madeTray.onRefresh = { madeStore.refreshAll() }
     madeTray.onSettings = { MainLoopDispatch.onMainLoop { presentSettings() } }
-    madeTray.onQuit = { MainLoopDispatch.onMainLoop { app.quit() } }
+    madeTray.onQuit = shutdown
 
     window = created
     webView = view
@@ -204,10 +223,13 @@ app.onActivate = {
     tray = madeTray
     store = madeStore
     costStore = madeCostStore
+    agentSessionsStore = madeAgentSessionsStore
     coordinator = madeCoordinator
     loginCoordinator = madeLoginCoordinator
 
     madeStore.applyRefreshInterval(madeCoordinator.linuxSettings().refreshInterval)
+    madeAgentSessionsStore.setIncludeFileOnlySessions(madeCoordinator.linuxSettings().includeFileOnlySessions)
+    madeAgentSessionsStore.start()
 }
 
 let status = app.run()

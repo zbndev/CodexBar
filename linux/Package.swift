@@ -8,6 +8,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: ".."),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
     ],
     targets: [
         .systemLibrary(
@@ -32,6 +33,7 @@ let package = Package(
                 "CWebKitGTK",
                 "CAyatanaAppIndicator",
                 .product(name: "CodexBarCore", package: "CodexBar"),
+                .product(name: "Crypto", package: "swift-crypto"),
             ],
             path: "Sources/CodexBarLinuxKit",
             resources: [.copy("../WebUI")],

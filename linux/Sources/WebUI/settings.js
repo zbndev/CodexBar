@@ -270,6 +270,9 @@ function renderRows(container, rows, providerID) {
       case 'claudeSwap':
         renderClaudeSwap(container, row.providerID);
         break;
+      case 'spendDashboard':
+        window.CodexBarSpendDashboard.render(container, state.payload);
+        break;
     }
   }
 

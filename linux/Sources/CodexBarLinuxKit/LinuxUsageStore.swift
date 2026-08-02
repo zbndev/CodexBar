@@ -74,9 +74,34 @@ public final class LinuxUsageStore: @unchecked Sendable {
 
     public func currentPayload() -> ProviderSnapshotPayload {
         self.lock.lock()
-        defer { self.lock.unlock() }
         let providers = self.order.compactMap { self.views[$0] }
-        return ProviderSnapshotPayload(generatedAt: Date(), providers: providers)
+        self.lock.unlock()
+        // Enrichment reads the history/cost stores, whose locks must never be
+        // taken under the views lock — hence the copy-then-decorate split.
+        return ProviderSnapshotPayload(
+            generatedAt: Date(),
+            providers: providers.map(self.enriched))
+    }
+
+    /// Re-sends the current state. Cost scans finish after the refresh that
+    /// triggered them; this is how their results reach the popup.
+    public func republish() {
+        self.onSnapshot(self.currentPayload())
+    }
+
+    private func enriched(_ view: ProviderView) -> ProviderView {
+        var view = view
+        view.cost = self.costStore?.view(providerID: view.id)
+        let series = view.windows.compactMap { window -> UtilizationHistorySeries? in
+            guard let loaded = try? self.resolvedHistoryStore()?.load(
+                providerID: view.id,
+                windowID: window.id),
+                loaded.segments.contains(where: { !$0.points.isEmpty })
+            else { return nil }
+            return loaded
+        }
+        view.history = series.isEmpty ? nil : series
+        return view
     }
 
     private func store(_ view: ProviderView) {

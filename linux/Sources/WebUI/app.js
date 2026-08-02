@@ -269,8 +269,101 @@ function renderDetail() {
     meta.append(used, reset);
     section.appendChild(meta);
 
+    const series = (provider.history || []).find((candidate) => candidate.windowID === window.id);
+    if (series && series.segments.some((segment) => segment.points.length > 0)) {
+      const history = document.createElement('div');
+      history.className = 'history-chart';
+      CodexBarCharts.renderUtilizationChart(history, series.segments, provider.accentColorHex);
+      section.appendChild(history);
+    }
+
     detail.appendChild(section);
   }
+
+  // One bounded line when nothing has been sampled yet — not one per window.
+  const hasHistory = (provider.history || []).some((series) =>
+    series.segments.some((segment) => segment.points.length > 0));
+  if (!hasHistory) {
+    const history = document.createElement('div');
+    history.className = 'history-chart';
+    CodexBarCharts.renderUtilizationChart(history, [], provider.accentColorHex);
+    detail.appendChild(history);
+  }
+
+  renderCost(detail, provider);
+}
+
+/// The expandable Cost block under the quota windows. Hidden by the same
+/// "credits and extra usage" preference as on macOS; identity hiding is
+/// enforced on the Swift side before anything reaches this page.
+function renderCost(detail, provider) {
+  const cost = provider.cost;
+  if (!cost) return;
+  if (state.display && !state.display.showCreditsAndExtraUsage) return;
+
+  const block = document.createElement('details');
+  block.className = 'cost';
+  const summary = document.createElement('summary');
+  const title = document.createElement('span');
+  title.className = 'cost-title';
+  title.textContent = 'Cost';
+  summary.appendChild(title);
+  if (cost.last30DaysCostUSD != null) {
+    const total = document.createElement('span');
+    total.className = 'cost-summary-total tabular';
+    total.textContent = `${CodexBarCharts.formatCost(cost.last30DaysCostUSD, cost.currencyCode)} / ${cost.historyDays}d`;
+    summary.appendChild(total);
+  }
+  block.appendChild(summary);
+
+  const rows = document.createElement('div');
+  rows.className = 'cost-rows';
+  if (cost.sessionCostUSD != null) {
+    rows.appendChild(costRow('This session', CodexBarCharts.formatCost(cost.sessionCostUSD, cost.currencyCode)));
+  }
+  if (cost.last30DaysCostUSD != null) {
+    rows.appendChild(costRow(`Last ${cost.historyDays} days`,
+      CodexBarCharts.formatCost(cost.last30DaysCostUSD, cost.currencyCode)));
+  }
+  block.appendChild(rows);
+
+  const chart = document.createElement('div');
+  chart.className = 'history-chart';
+  CodexBarCharts.renderCostChart(chart, cost.daily || [], cost.currencyCode, provider.accentColorHex);
+  block.appendChild(chart);
+
+  const source = document.createElement('p');
+  source.className = 'cost-note';
+  source.textContent = cost.source === 'Local estimate'
+    ? 'Estimated from local token usage'
+    : 'Provider-reported';
+  block.appendChild(source);
+  const disclaimer = document.createElement('p');
+  disclaimer.className = 'cost-note';
+  disclaimer.textContent = 'Estimates are not subscription charges.';
+  block.appendChild(disclaimer);
+
+  const refresh = document.createElement('button');
+  refresh.className = 'cost-refresh';
+  refresh.textContent = t('Refresh');
+  refresh.addEventListener('click', () => {
+    bridge.send({ type: 'refreshCost', provider: provider.id });
+  });
+  block.appendChild(refresh);
+
+  detail.appendChild(block);
+}
+
+function costRow(label, value) {
+  const row = document.createElement('div');
+  row.className = 'cost-row';
+  const name = document.createElement('span');
+  name.textContent = label;
+  const amount = document.createElement('span');
+  amount.className = 'tabular';
+  amount.textContent = value;
+  row.append(name, amount);
+  return row;
 }
 
 // The element ids and their handlers are unchanged from the button footer —

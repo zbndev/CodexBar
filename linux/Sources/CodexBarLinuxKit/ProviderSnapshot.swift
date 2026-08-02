@@ -57,6 +57,11 @@ public struct ProviderView: Codable, Equatable, Sendable {
     public var isLoading: Bool
     public var dashboardURL: String?
     public var statusPageURL: String?
+    /// The latest cost scan, when the provider supports one. Attached at
+    /// payload time by `LinuxUsageStore`, never by the fetch path.
+    public var cost: ProviderCostView?
+    /// Persisted utilization samples per window, for the history charts.
+    public var history: [UtilizationHistorySeries]?
 
     public init(
         id: String,
@@ -73,7 +78,9 @@ public struct ProviderView: Codable, Equatable, Sendable {
         errorMessage: String? = nil,
         isLoading: Bool = false,
         dashboardURL: String? = nil,
-        statusPageURL: String? = nil)
+        statusPageURL: String? = nil,
+        cost: ProviderCostView? = nil,
+        history: [UtilizationHistorySeries]? = nil)
     {
         self.id = id
         self.displayName = displayName
@@ -90,6 +97,8 @@ public struct ProviderView: Codable, Equatable, Sendable {
         self.isLoading = isLoading
         self.dashboardURL = dashboardURL
         self.statusPageURL = statusPageURL
+        self.cost = cost
+        self.history = history
     }
 }
 
@@ -112,6 +121,20 @@ public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
         self.providers = providers
         self.localization = localization
         self.display = display
+    }
+
+    /// Identity hiding must be a data guarantee, not a rendering habit: with
+    /// it on, project paths and session ids never cross the bridge at all.
+    /// Daily aggregates stay — the charts need them and they carry no identity.
+    public func hidingPersonalInfo(_ enabled: Bool) -> ProviderSnapshotPayload {
+        guard enabled else { return self }
+        var copy = self
+        copy.providers = self.providers.map { provider in
+            var provider = provider
+            provider.cost = provider.cost?.hidingPersonalInfo()
+            return provider
+        }
+        return copy
     }
 }
 

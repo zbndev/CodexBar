@@ -28,6 +28,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case setKiloOrganizationEnabled(id: String, enabled: Bool)
     case refreshClaudeSwap
     case switchClaudeSwapAccount(number: Int)
+    case refreshCost(provider: String)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -104,6 +105,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .refreshClaudeSwap
         case "switchClaudeSwapAccount":
             self = .switchClaudeSwapAccount(number: try container.decode(Int.self, forKey: .number))
+        case "refreshCost":
+            self = .refreshCost(provider: try container.decode(String.self, forKey: .provider))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -180,6 +183,9 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case let .switchClaudeSwapAccount(number):
             try container.encode("switchClaudeSwapAccount", forKey: .type)
             try container.encode(number, forKey: .number)
+        case let .refreshCost(provider):
+            try container.encode("refreshCost", forKey: .type)
+            try container.encode(provider, forKey: .provider)
         }
     }
 }

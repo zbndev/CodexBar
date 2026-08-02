@@ -17,6 +17,10 @@ public final class SettingsCoordinator: @unchecked Sendable {
     private let onChange: @Sendable () -> Void
     private let kiloOrganizationFetch: @Sendable (String, [String: String]) async throws -> [KiloOrganization]
     private let claudeSwapCoordinator: ClaudeSwapCoordinator
+    /// The spend pane's data source: every provider with an available cost
+    /// snapshot. A closure because the cost store lives next to the usage
+    /// store in main.swift, not inside this coordinator.
+    private let costViews: @Sendable () -> [ProviderCostView]
     public let kiloOrganizations: KiloOrganizationsState
     public let claudeSwap: ClaudeSwapState
 
@@ -30,6 +34,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
             apiKey, environment in
             try await KiloUsageFetcher.fetchOrganizations(apiKey: apiKey, environment: environment)
         },
+        costViews: @escaping @Sendable () -> [ProviderCostView] = { [] },
         onChange: @escaping @Sendable () -> Void)
     {
         self.configStore = configStore
@@ -37,6 +42,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
         self.onChange = onChange
         self.kiloOrganizationFetch = kiloOrganizationFetch
         self.claudeSwapCoordinator = claudeSwapCoordinator
+        self.costViews = costViews
         self.claudeSwap = claudeSwap ?? ClaudeSwapState()
         let config = try? configStore.load()
         let provider = config?.providerConfig(for: .kilo)
@@ -72,6 +78,9 @@ public final class SettingsCoordinator: @unchecked Sendable {
         }
         let settings = self.linuxSettings()
         let hooks = config?.hooks ?? HooksConfig()
+        // Scrubbed here, not in the web layer: with identity hiding on, paths
+        // and session ids never enter the payload the window receives.
+        let costs = self.costViews().map { settings.hidePersonalInfo ? $0.hidingPersonalInfo() : $0 }
         return SettingsPayload(
             generatedAt: Date(),
             settings: settings,
@@ -81,6 +90,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
             kiloOrganizations: self.kiloOrganizations.payload(),
             claudeSwap: self.claudeSwap.payload(),
             hooks: hooks,
+            costs: costs,
             localization: LocalizationCatalog.load(locale: settings.language))
     }
 

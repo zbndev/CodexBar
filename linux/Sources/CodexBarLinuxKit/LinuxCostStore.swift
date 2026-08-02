@@ -31,15 +31,20 @@ public final class LinuxCostStore: @unchecked Sendable {
 
     private let lock = NSLock()
     private let load: Loader
+    /// Fires after a refresh actually publishes a new state (stale-generation
+    /// discards excluded), so the popup and the spend pane can republish with
+    /// the fresh snapshot. Invoked outside the lock.
+    private let onChange: @Sendable () -> Void
     private var generations: [String: UInt64] = [:]
     private var latestRequests: [String: Request] = [:]
     private var states: [String: ProviderCostState] = [:]
 
-    public init(load: @escaping Loader) {
+    public init(load: @escaping Loader, onChange: @escaping @Sendable () -> Void = {}) {
         self.load = load
+        self.onChange = onChange
     }
 
-    public convenience init() {
+    public convenience init(onChange: @escaping @Sendable () -> Void = {}) {
         self.init(load: { request in
             let environment = UsageRefresher.resolvedEnvironment(
                 base: ProcessInfo.processInfo.environment,
@@ -50,7 +55,7 @@ public final class LinuxCostStore: @unchecked Sendable {
                 environment: environment,
                 forceRefresh: request.forceRefresh,
                 historyDays: request.historyDays)
-        })
+        }, onChange: onChange)
     }
 
     public func refresh(providerID: String, config: ProviderConfig, forceRefresh: Bool = false) async {
@@ -97,6 +102,17 @@ public final class LinuxCostStore: @unchecked Sendable {
         return view
     }
 
+    /// Every provider with an available snapshot, in stable id order — the
+    /// spend pane's data source.
+    public func availableViews() -> [ProviderCostView] {
+        self.lock.withLock {
+            self.states.values.compactMap { state -> ProviderCostView? in
+                guard case let .available(view) = state else { return nil }
+                return view
+            }.sorted { $0.providerID < $1.providerID }
+        }
+    }
+
     private func startRequest(providerID: String, config: ProviderConfig) -> Request {
         self.lock.withLock {
             let key = "\(providerID):\(Self.fingerprint(config))"
@@ -109,10 +125,14 @@ public final class LinuxCostStore: @unchecked Sendable {
     }
 
     private func publish(_ state: ProviderCostState, providerID: String, request: Request) {
-        self.lock.withLock {
-            guard self.latestRequests[providerID] == request else { return }
+        // The lock is not reentrant and onChange republishes through stores
+        // that read this one, so the callback must run after it is released.
+        let published = self.lock.withLock { () -> Bool in
+            guard self.latestRequests[providerID] == request else { return false }
             self.states[providerID] = state
+            return true
         }
+        if published { self.onChange() }
     }
 
     private static func fingerprint(_ config: ProviderConfig) -> String {

@@ -184,3 +184,101 @@ private final class TestFlag: @unchecked Sendable {
     #expect(hooks?.events.count == 1)
     #expect(hooks?.events.first?.executable == "/bin/true")
 }
+
+// MARK: - M5.7 history charts and spend dashboard
+
+private func fixtureCostView() -> ProviderCostView {
+    let daily = CostUsageDailyReport.Entry(
+        date: "2026-08-01",
+        inputTokens: 100,
+        outputTokens: 200,
+        totalTokens: 300,
+        requestCount: 3,
+        costUSD: 1.25,
+        modelsUsed: ["fixture-model"],
+        modelBreakdowns: nil)
+    let project = CostUsageProjectBreakdown(
+        name: "fixture project",
+        path: "/home/fixture/project",
+        totalTokens: 300,
+        totalCostUSD: 1.25,
+        daily: [daily],
+        modelBreakdowns: nil,
+        sources: [])
+    let session = CostUsageSessionBreakdown(
+        sessionID: "fixture-session-id",
+        lastActivity: Date(timeIntervalSince1970: 1),
+        inputTokens: 100,
+        cachedInputTokens: nil,
+        outputTokens: 200,
+        totalTokens: 300,
+        requestCount: 3,
+        costUSD: 1.25,
+        modelBreakdowns: [])
+    return ProviderCostView(
+        providerID: "codex",
+        sessionCostUSD: 0.5,
+        last30DaysCostUSD: 1.25,
+        currencyCode: "USD",
+        historyDays: 30,
+        daily: [daily],
+        projects: [project],
+        sessions: [session],
+        updatedAt: Date(timeIntervalSince1970: 1),
+        source: "Local estimate")
+}
+
+@Test func `settings payloads carrying cost views round-trip through JSON`() throws {
+    let payload = SettingsPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        settings: LinuxSettings(),
+        general: [],
+        providers: [],
+        hooks: HooksConfig(),
+        costs: [fixtureCostView()],
+        localization: LocalizationCatalog.load(locale: "en"))
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    #expect(try decoder.decode(SettingsPayload.self, from: encoder.encode(payload)) == payload)
+}
+
+@Test func `the settings payload carries the available cost views for the spend pane`() throws {
+    let (configStore, settingsStore) = tempStores()
+    let costView = fixtureCostView()
+    let coordinator = SettingsCoordinator(
+        configStore: configStore,
+        settingsStore: settingsStore,
+        costViews: { [costView] },
+        onChange: {})
+    let payload = coordinator.payload()
+    #expect(payload.costs == [costView])
+    #expect(payload.costs.first?.daily.isEmpty == false)
+}
+
+@Test func `identity hiding strips cost breakdowns from the settings payload`() throws {
+    let (configStore, settingsStore) = tempStores()
+    var settings = LinuxSettings()
+    settings.hidePersonalInfo = true
+    try settingsStore.save(settings)
+    let coordinator = SettingsCoordinator(
+        configStore: configStore,
+        settingsStore: settingsStore,
+        costViews: { [fixtureCostView()] },
+        onChange: {})
+    let cost = try #require(coordinator.payload().costs.first)
+    #expect(cost.projects.isEmpty)
+    #expect(cost.sessions.isEmpty)
+    #expect(!cost.daily.isEmpty)
+}
+
+@Test func `the spend pane offers the live dashboard instead of the placeholder`() throws {
+    let panes = GeneralPaneCatalog.panes(settings: LinuxSettings(), hooks: HooksConfig())
+    let spend = try #require(panes.first { $0.id == "spend" })
+    #expect(spend.rows.contains(.spendDashboard))
+    #expect(!spend.rows.contains { row in
+        if case .info(_, let value) = row { return value.contains("Arrives") }
+        return false
+    })
+}

@@ -139,6 +139,68 @@ body {
 .state { padding: var(--space-3) 0; color: var(--fg-dim); }
 .state.is-error { color: var(--danger); }
 
+/* --- History charts and cost ---------------------------------------------- */
+
+/* The chart primitives themselves (.history-chart, .chart-axis-label,
+   .chart-point) live in tokens.css: both windows draw the same SVG. */
+
+.cost {
+  margin: 0 0 var(--space-4);
+  border-top: 1px solid var(--divider);
+  padding-top: var(--space-2);
+}
+
+.cost summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  cursor: pointer;
+  font: var(--text-heading);
+  list-style: none;
+}
+
+/* WebKit drops the disclosure triangle once summary becomes a flex box, so
+   the caret is drawn as a CSS triangle and rotated open. */
+.cost summary::-webkit-details-marker { display: none; }
+
+.cost summary::before {
+  content: "";
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: var(--space-1);
+  border-left: 5px solid var(--fg-dim);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+}
+
+.cost[open] summary::before { transform: rotate(90deg); }
+
+.cost-summary-total { color: var(--fg-dim); font: var(--text-small); }
+
+.cost-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  color: var(--fg-dim);
+  font: var(--text-small);
+}
+
+.cost-refresh {
+  margin-top: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--fg);
+  font: var(--text-small);
+  cursor: pointer;
+}
+
+.cost-refresh:hover { background: var(--accent-soft); }
+
 /* --- Action list ---------------------------------------------------------- */
 
 .actions {

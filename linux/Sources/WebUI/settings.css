@@ -296,3 +296,48 @@ input[type="radio"]:checked::after {
 
 .collection-card .row:last-of-type { border-bottom: 0; }
 .collection-card .row-actions:last-of-type { padding-bottom: 0; }
+
+/* --- Spend dashboard ------------------------------------------------------- */
+
+.spend-provider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.spend-provider-name { font: var(--text-heading); }
+
+/* One period per line, one vertical for the values — the same contract the
+   generic rows above keep. */
+.spend-period {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+}
+
+.spend-period-label { flex: 1 1 auto; color: var(--fg-dim); }
+.spend-period-value { font: var(--text-heading); }
+.spend-period-detail { color: var(--fg-dim); font: var(--text-small); }
+
+.spend-model {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.spend-model-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.spend-model-value { color: var(--fg-dim); font: var(--text-small); }
+
+.spend-more { color: var(--fg-dim); font: var(--text-small); }

@@ -29,7 +29,7 @@ public enum GeneralPaneCatalog {
                     key: "showCreditsAndExtraUsage",
                     title: "Show credits and extra usage",
                     value: settings.showCreditsAndExtraUsage),
-                .info(title: "Spend dashboard", value: "Arrives with M5"),
+                .spendDashboard,
             ]),
             self.notificationsPane(settings),
             GeneralPane(id: "tray", title: "Tray", rows: [

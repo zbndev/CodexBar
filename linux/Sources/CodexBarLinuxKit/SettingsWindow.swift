@@ -20,6 +20,7 @@ public final class SettingsWindow: @unchecked Sendable {
         loginCoordinator: LoginCoordinator,
         registerSink: (@escaping @Sendable (SettingsPayload) -> Void) -> Void,
         onRefresh: @escaping @Sendable () -> Void,
+        onRefreshCost: @escaping @Sendable (String) -> Void,
         onQuit: @escaping @Sendable () -> Void)
     {
         self.coordinator = coordinator
@@ -116,6 +117,8 @@ public final class SettingsWindow: @unchecked Sendable {
                 Task { await coordinator.refreshClaudeSwap() }
             case let .switchClaudeSwapAccount(number):
                 Task { await coordinator.switchClaudeSwapAccount(number: number) }
+            case let .refreshCost(providerID):
+                onRefreshCost(providerID)
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

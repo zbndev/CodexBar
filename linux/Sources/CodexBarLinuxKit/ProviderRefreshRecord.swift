@@ -113,6 +113,22 @@ public struct ProviderCostView: Codable, Equatable, Sendable {
         try container.encode(self.updatedAt, forKey: .updatedAt)
         try container.encode(self.source, forKey: .source)
     }
+
+    /// The same snapshot minus everything that names the user's work: project
+    /// paths and session ids. Totals and the daily report carry no identity.
+    public func hidingPersonalInfo() -> ProviderCostView {
+        ProviderCostView(
+            providerID: self.providerID,
+            sessionCostUSD: self.sessionCostUSD,
+            last30DaysCostUSD: self.last30DaysCostUSD,
+            currencyCode: self.currencyCode,
+            historyDays: self.historyDays,
+            daily: self.daily,
+            projects: [],
+            sessions: [],
+            updatedAt: self.updatedAt,
+            source: self.source)
+    }
 }
 
 private struct CostModelPayload: Codable {

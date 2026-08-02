@@ -136,3 +136,36 @@
     background: var(--icon-chip);
   }
 }
+
+/* --- Charts ---------------------------------------------------------------- */
+
+/* The SVG scales to the pane; its 320x96 viewBox keeps the label band under
+   the plot at every width. Empty states arrive as plain text from the
+   renderer, so the holder styles both. */
+.history-chart {
+  margin: var(--space-2) 0 var(--space-4);
+  color: var(--fg-dim);
+  font: var(--text-small);
+}
+
+.history-chart svg { display: block; width: 100%; height: auto; }
+
+.history-chart .chart-axis-label {
+  fill: var(--fg-dim);
+  font-size: 6px;
+  font-family: var(--font-ui);
+}
+
+/* Focus rings inside SVG: the shared :focus-visible outline does not paint on
+   SVG shapes in WebKitGTK, so a focused datum gets an accent stroke instead. */
+.history-chart .chart-point:focus { outline: none; }
+.history-chart .chart-point:focus-visible {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+.cost-note {
+  margin: var(--space-1) 0 0;
+  color: var(--fg-dim);
+  font: var(--text-small);
+}

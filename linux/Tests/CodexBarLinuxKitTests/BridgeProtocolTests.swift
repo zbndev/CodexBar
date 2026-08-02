@@ -291,3 +291,125 @@ import Testing
     #expect(line.contains("unnamed"))
     #expect(!line.contains("not json"))
 }
+
+// MARK: - M5.7 history charts and spend dashboard
+
+/// A cost snapshot with a non-empty daily report plus identity-bearing
+/// breakdowns, so the scrubbing tests have something real to strip.
+private func fixtureCostView() -> ProviderCostView {
+    let daily = CostUsageDailyReport.Entry(
+        date: "2026-08-01",
+        inputTokens: 100,
+        outputTokens: 200,
+        totalTokens: 300,
+        requestCount: 3,
+        costUSD: 1.25,
+        modelsUsed: ["fixture-model"],
+        modelBreakdowns: nil)
+    let project = CostUsageProjectBreakdown(
+        name: "fixture project",
+        path: "/home/fixture/project",
+        totalTokens: 300,
+        totalCostUSD: 1.25,
+        daily: [daily],
+        modelBreakdowns: nil,
+        sources: [])
+    let session = CostUsageSessionBreakdown(
+        sessionID: "fixture-session-id",
+        lastActivity: Date(timeIntervalSince1970: 1),
+        inputTokens: 100,
+        cachedInputTokens: nil,
+        outputTokens: 200,
+        totalTokens: 300,
+        requestCount: 3,
+        costUSD: 1.25,
+        modelBreakdowns: [])
+    return ProviderCostView(
+        providerID: "codex",
+        sessionCostUSD: 0.5,
+        last30DaysCostUSD: 1.25,
+        currencyCode: "USD",
+        historyDays: 30,
+        daily: [daily],
+        projects: [project],
+        sessions: [session],
+        updatedAt: Date(timeIntervalSince1970: 1),
+        source: "Local estimate")
+}
+
+/// Two utilization points in one segment — the smallest history the popup
+/// chart can draw a line through.
+private func fixtureHistory() -> [UtilizationHistorySeries] {
+    [UtilizationHistorySeries(windowID: "primary", segments: [
+        UtilizationHistorySegment(resetsAt: nil, points: [
+            UtilizationHistoryPoint(capturedAt: Date(timeIntervalSince1970: 100), usedPercent: 12.5, resetsAt: nil),
+            UtilizationHistoryPoint(capturedAt: Date(timeIntervalSince1970: 200), usedPercent: 25, resetsAt: nil),
+        ]),
+    ])]
+}
+
+private func fixtureProviderWithCostAndHistory() -> ProviderView {
+    var provider = ProviderView(
+        id: "codex",
+        displayName: "Codex",
+        iconResourceName: "codex",
+        accentColorHex: "#000000",
+        enabled: true,
+        windows: [ProviderWindowView(id: "primary", title: "Session", usedPercent: 25)])
+    provider.cost = fixtureCostView()
+    provider.history = fixtureHistory()
+    return provider
+}
+
+@Test func `a refresh-cost command round-trips through JSON`() throws {
+    let original = BridgeCommand.refreshCost(provider: "codex")
+    let data = try JSONEncoder().encode(original)
+    #expect(String(decoding: data, as: UTF8.self).contains("\"refreshCost\""))
+    #expect(try JSONDecoder().decode(BridgeCommand.self, from: data) == original)
+}
+
+@Test func `a refresh-cost command decodes from the wire format the web UI sends`() throws {
+    let json = #"{"type":"refreshCost","provider":"claude"}"#
+    let decoded = try JSONDecoder().decode(BridgeCommand.self, from: Data(json.utf8))
+    #expect(decoded == .refreshCost(provider: "claude"))
+}
+
+@Test func `a snapshot carrying cost and utilization history round-trips through JSON`() throws {
+    let payload = ProviderSnapshotPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        providers: [fixtureProviderWithCostAndHistory()])
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    #expect(try decoder.decode(
+        ProviderSnapshotPayload.self,
+        from: encoder.encode(payload)) == payload)
+}
+
+@Test func `identity hiding strips project paths and session ids from snapshot costs`() throws {
+    let payload = ProviderSnapshotPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        providers: [fixtureProviderWithCostAndHistory()])
+
+    let hidden = payload.hidingPersonalInfo(true)
+    let cost = try #require(hidden.providers.first?.cost)
+    #expect(cost.projects.isEmpty)
+    #expect(cost.sessions.isEmpty)
+    // Aggregates survive: the charts need the daily report and the totals.
+    #expect(cost.daily.count == 1)
+    #expect(cost.sessionCostUSD == 0.5)
+    #expect(hidden.providers.first?.history == fixtureHistory())
+
+    #expect(payload.hidingPersonalInfo(false) == payload)
+}
+
+@Test func `identity hiding keeps project paths and session ids out of the encoded snapshot`() throws {
+    let payload = ProviderSnapshotPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        providers: [fixtureProviderWithCostAndHistory()])
+    let text = String(decoding: try JSONEncoder().encode(payload.hidingPersonalInfo(true)), as: UTF8.self)
+    #expect(!text.contains("/home/fixture/project"))
+    #expect(!text.contains("fixture-session-id"))
+    #expect(text.contains("fixture-model"))
+}

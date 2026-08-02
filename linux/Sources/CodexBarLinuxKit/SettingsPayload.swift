@@ -11,6 +11,10 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
     public var kiloOrganizations: KiloOrganizationsPayload
     public var claudeSwap: ClaudeSwapPayload
     public var hooks: HooksConfig
+    /// Providers with an available cost snapshot; the Usage & Spend pane
+    /// groups and renders these. Already identity-scrubbed when the user's
+    /// settings demand it — the web layer never re-adds detail.
+    public var costs: [ProviderCostView]
     public var localization: LocalizationPayload
 
     public init(
@@ -22,6 +26,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         kiloOrganizations: KiloOrganizationsPayload = KiloOrganizationsPayload(),
         claudeSwap: ClaudeSwapPayload = ClaudeSwapPayload(executablePath: nil, accounts: [], errorMessage: nil),
         hooks: HooksConfig,
+        costs: [ProviderCostView] = [],
         localization: LocalizationPayload)
     {
         self.localization = localization
@@ -33,5 +38,6 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         self.kiloOrganizations = kiloOrganizations
         self.claudeSwap = claudeSwap
         self.hooks = hooks
+        self.costs = costs
     }
 }

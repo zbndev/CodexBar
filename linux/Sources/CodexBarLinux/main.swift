@@ -37,14 +37,21 @@ app.onActivate = {
     // Publishing goes through the main loop: snapshots arrive on background
     // tasks, and WebKit may only be touched from the GTK thread.
     let kiloOrganizations = KiloOrganizationsState()
-    let madeCostStore = LinuxCostStore()
+    // A finished cost scan must reach both surfaces: the popup snapshot gains
+    // the provider's cost, and an open Usage & Spend pane re-renders.
+    let madeCostStore = LinuxCostStore(onChange: {
+        MainLoopDispatch.onMainLoop {
+            store?.republish()
+            publishSettings()
+        }
+    })
     let madeStore = LinuxUsageStore(
         kiloOrganizations: kiloOrganizations,
         onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } },
         costStore: madeCostStore) { payload in
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
-            var renderedPayload = payload
+            var renderedPayload = payload.hidingPersonalInfo(settings.hidePersonalInfo)
             renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
             renderedPayload.display = DisplayPreferences(settings: settings)
             bridge?.send(.snapshot(renderedPayload))
@@ -63,6 +70,7 @@ app.onActivate = {
         configStore: CodexBarConfigStore(),
         settingsStore: LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()),
         kiloOrganizations: kiloOrganizations,
+        costViews: { madeCostStore.availableViews() },
         onChange: {
             // Everything here touches GTK/WebKit or store state the main loop
             // owns, so it must run there. The captured state is the top-level
@@ -85,6 +93,13 @@ app.onActivate = {
         }
     }
 
+    // Both surfaces send refreshCost for the provider they are showing; the
+    // forced rescan's completion republishes through the onChange above.
+    let refreshCost: @Sendable (String) -> Void = { providerID in
+        guard let config = madeCoordinator.providerConfig(id: providerID) else { return }
+        Task { await madeCostStore.refresh(providerID: providerID, config: config, forceRefresh: true) }
+    }
+
     // One presenter shared by the popup's footer button and the tray menu:
     // the window is built lazily and reused, so its bridge survives a close.
     let presentSettings: @Sendable () -> Void = {
@@ -95,6 +110,7 @@ app.onActivate = {
                 loginCoordinator: madeLoginCoordinator,
                 registerSink: { settingsEventSink = $0 },
                 onRefresh: { madeStore.refreshAll() },
+                onRefreshCost: refreshCost,
                 onQuit: { MainLoopDispatch.onMainLoop { app.quit() } })
         }
         settingsWindow?.present()
@@ -107,6 +123,7 @@ app.onActivate = {
             MainLoopDispatch.onMainLoop {
                 let settings = madeCoordinator.linuxSettings()
                 var renderedPayload = madeStore.currentPayload()
+                    .hidingPersonalInfo(settings.hidePersonalInfo)
                 renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
                 renderedPayload.display = DisplayPreferences(settings: settings)
                 bridge?.send(.snapshot(renderedPayload))
@@ -121,6 +138,8 @@ app.onActivate = {
             } else {
                 madeStore.refreshAll()
             }
+        case let .refreshCost(provider):
+            refreshCost(provider)
         case let .openURL(url):
             SystemBrowser.open(url)
         case .selectProvider:

@@ -76,6 +76,9 @@ public enum PaneRow: Codable, Equatable, Sendable {
     case quotaWarnings(providerID: String)
     case organizations(providerID: String)
     case claudeSwap(providerID: String)
+    /// Marker for the Usage & Spend pane's live dashboard; the data rides in
+    /// `SettingsPayload.costs`, same pattern as the provider collection rows.
+    case spendDashboard
 
     private enum CodingKeys: String, CodingKey {
         case kind
@@ -140,6 +143,8 @@ public enum PaneRow: Codable, Equatable, Sendable {
             self = .organizations(providerID: try c.decode(String.self, forKey: .providerID))
         case "claudeSwap":
             self = .claudeSwap(providerID: try c.decode(String.self, forKey: .providerID))
+        case "spendDashboard":
+            self = .spendDashboard
         case let unknown:
             throw DecodingError.dataCorruptedError(
                 forKey: .kind, in: c,
@@ -209,6 +214,8 @@ public enum PaneRow: Codable, Equatable, Sendable {
         case let .claudeSwap(providerID):
             try c.encode("claudeSwap", forKey: .kind)
             try c.encode(providerID, forKey: .providerID)
+        case .spendDashboard:
+            try c.encode("spendDashboard", forKey: .kind)
         }
     }
 }

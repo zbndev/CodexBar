@@ -24,6 +24,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case reauthenticateManagedCodexAccount(id: UUID)
     case removeManagedCodexAccount(id: UUID)
     case selectManagedCodexAccount(id: UUID?)
+    case refreshKiloOrganizations
+    case setKiloOrganizationEnabled(id: String, enabled: Bool)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -36,6 +38,7 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case providerID
         case data
         case config
+        case enabled
     }
 
     public init(from decoder: any Decoder) throws {
@@ -88,6 +91,12 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .removeManagedCodexAccount(id: try container.decode(UUID.self, forKey: .id))
         case "selectManagedCodexAccount":
             self = .selectManagedCodexAccount(id: try container.decodeIfPresent(UUID.self, forKey: .id))
+        case "refreshKiloOrganizations":
+            self = .refreshKiloOrganizations
+        case "setKiloOrganizationEnabled":
+            self = .setKiloOrganizationEnabled(
+                id: try container.decode(String.self, forKey: .id),
+                enabled: try container.decode(Bool.self, forKey: .enabled))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -153,6 +162,12 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
         case let .selectManagedCodexAccount(id):
             try container.encode("selectManagedCodexAccount", forKey: .type)
             try container.encodeIfPresent(id, forKey: .id)
+        case .refreshKiloOrganizations:
+            try container.encode("refreshKiloOrganizations", forKey: .type)
+        case let .setKiloOrganizationEnabled(id, enabled):
+            try container.encode("setKiloOrganizationEnabled", forKey: .type)
+            try container.encode(id, forKey: .id)
+            try container.encode(enabled, forKey: .enabled)
         }
     }
 }

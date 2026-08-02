@@ -14,12 +14,18 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private let refresher = UsageRefresher()
     private let onSnapshot: @Sendable (ProviderSnapshotPayload) -> Void
     private let configStore: CodexBarConfigStore
+    private let kiloOrganizations: KiloOrganizationsState
+    private let onKiloOrganizationsChange: @Sendable () -> Void
 
     public init(
         configStore: CodexBarConfigStore = CodexBarConfigStore(),
+        kiloOrganizations: KiloOrganizationsState = KiloOrganizationsState(),
+        onKiloOrganizationsChange: @escaping @Sendable () -> Void = {},
         onSnapshot: @escaping @Sendable (ProviderSnapshotPayload) -> Void)
     {
         self.configStore = configStore
+        self.kiloOrganizations = kiloOrganizations
+        self.onKiloOrganizationsChange = onKiloOrganizationsChange
         self.onSnapshot = onSnapshot
         self.seedPlaceholders()
     }
@@ -75,6 +81,12 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) {
         let mode = UsageRefresher.sourceMode(for: descriptor.id, config: config)
         let providerConfig = config?.providers.first { $0.id == descriptor.id }
+        if descriptor.id == .kilo,
+           self.kiloScopes(config: providerConfig).count > 1
+        {
+            self.startKiloScopeRefresh(descriptor: descriptor, config: providerConfig)
+            return
+        }
         let settings = LinuxSettingsSnapshot.make(config: config)
         let refresher = self.refresher
         Task.detached { [weak self] in
@@ -99,6 +111,94 @@ public final class LinuxUsageStore: @unchecked Sendable {
                     error: error)
             }
             self.store(view)
+        }
+    }
+
+    private func kiloScopes(config: ProviderConfig?) -> [KiloUsageScope] {
+        let organizations = config?.kiloKnownOrganizations ?? []
+        let organizationsByID = Dictionary(uniqueKeysWithValues: organizations.map { ($0.id, $0) })
+        let enabledIDs = config?.kiloEnabledOrganizationIDs ?? []
+        let organizationScopes = enabledIDs.compactMap { id -> KiloUsageScope? in
+            guard let organization = organizationsByID[id] else { return nil }
+            return .organization(id: organization.id, name: organization.name)
+        }
+        return [.personal] + organizationScopes
+    }
+
+    private func startKiloScopeRefresh(descriptor: ProviderDescriptor, config: ProviderConfig?) {
+        let scopes = self.kiloScopes(config: config)
+        let source = Self.kiloSourceMode(config?.source)
+        let environment = ProcessInfo.processInfo.environment
+        self.kiloOrganizations.beginRefresh()
+        self.onKiloOrganizationsChange()
+
+        Task.detached { [weak self] in
+            guard let self else { return }
+            let token: KiloResolvedBearerToken
+            do {
+                token = try KiloBearerTokenResolver.resolve(
+                    source: source,
+                    apiKey: config?.sanitizedAPIKey,
+                    environment: environment)
+            } catch {
+                let failedScopes = scopes.map {
+                    KiloScopeView(
+                        id: $0.scopeIdentifier,
+                        title: $0.displayName,
+                        view: nil,
+                        errorMessage: "Could not refresh \($0.displayName).")
+                }
+                self.kiloOrganizations.finishScopeRefresh(scopes: failedScopes)
+                self.onKiloOrganizationsChange()
+                return
+            }
+
+            let ordered = await KiloOrganizationCoordinator.refreshScopes(scopes) { scope in
+                let usage = try await KiloUsageFetcher.fetchUsage(
+                    apiKey: token.token,
+                    scope: scope,
+                    environment: environment).toUsageSnapshot()
+                var view = SnapshotBuilder.view(
+                    descriptor: descriptor,
+                    enabled: true,
+                    usage: usage,
+                    sourceLabel: token.sourceLabel)
+                view.id = "\(descriptor.id.rawValue):\(scope.scopeIdentifier)"
+                view.displayName = "\(descriptor.metadata.displayName) — \(scope.displayName)"
+                return KiloScopeView(
+                    id: scope.scopeIdentifier,
+                    title: scope.displayName,
+                    view: view,
+                    errorMessage: nil)
+            }
+            self.kiloOrganizations.finishScopeRefresh(scopes: ordered)
+            self.onKiloOrganizationsChange()
+
+            if var personal = ordered.first(where: { $0.id == KiloUsageScope.personal.scopeIdentifier })?.view {
+                personal.id = descriptor.id.rawValue
+                personal.displayName = descriptor.metadata.displayName
+                self.store(personal)
+            } else {
+                self.store(ProviderView(
+                    id: descriptor.id.rawValue,
+                    displayName: descriptor.metadata.displayName,
+                    iconResourceName: descriptor.branding.iconResourceName,
+                    iconSVG: ProviderIcons.svg(named: descriptor.branding.iconResourceName),
+                    accentColorHex: descriptor.branding.color.hexString,
+                    enabled: true,
+                    errorMessage: "Could not refresh Personal."))
+            }
+        }
+    }
+
+    private static func kiloSourceMode(_ source: ProviderSourceMode?) -> KiloUsageDataSource {
+        switch source {
+        case .api:
+            .api
+        case .cli:
+            .cli
+        case .auto, .web, .oauth, nil:
+            .auto
         }
     }
 

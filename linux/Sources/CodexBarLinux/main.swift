@@ -35,7 +35,10 @@ app.onActivate = {
 
     // Publishing goes through the main loop: snapshots arrive on background
     // tasks, and WebKit may only be touched from the GTK thread.
-    let madeStore = LinuxUsageStore { payload in
+    let kiloOrganizations = KiloOrganizationsState()
+    let madeStore = LinuxUsageStore(
+        kiloOrganizations: kiloOrganizations,
+        onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } }) { payload in
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
             var renderedPayload = payload
@@ -56,6 +59,7 @@ app.onActivate = {
     let madeCoordinator = SettingsCoordinator(
         configStore: CodexBarConfigStore(),
         settingsStore: LinuxSettingsStore(fileURL: LinuxSettingsStore.defaultURL()),
+        kiloOrganizations: kiloOrganizations,
         onChange: {
             // Everything here touches GTK/WebKit or store state the main loop
             // owns, so it must run there. The captured state is the top-level
@@ -122,9 +126,9 @@ app.onActivate = {
             MainLoopDispatch.onMainLoop { presentSettings() }
         // Handled by the settings window's own bridge, never the popup's.
         case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
-              .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
-              .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
-              .selectManagedCodexAccount:
+               .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin,
+               .addManagedCodexAccount, .reauthenticateManagedCodexAccount, .removeManagedCodexAccount,
+               .selectManagedCodexAccount, .refreshKiloOrganizations, .setKiloOrganizationEnabled:
             break
         case .quit:
             app.quit()

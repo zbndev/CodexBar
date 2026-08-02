@@ -8,6 +8,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
     public var general: [GeneralPane]
     public var providers: [ProviderPanePayload]
     public var managedCodexAccounts: [ManagedCodexAccountView]
+    public var kiloOrganizations: KiloOrganizationsPayload
     public var hooks: HooksConfig
     public var localization: LocalizationPayload
 
@@ -17,6 +18,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         general: [GeneralPane],
         providers: [ProviderPanePayload],
         managedCodexAccounts: [ManagedCodexAccountView] = [],
+        kiloOrganizations: KiloOrganizationsPayload = KiloOrganizationsPayload(),
         hooks: HooksConfig,
         localization: LocalizationPayload)
     {
@@ -26,6 +28,7 @@ public struct SettingsPayload: Codable, Equatable, Sendable {
         self.general = general
         self.providers = providers
         self.managedCodexAccounts = managedCodexAccounts
+        self.kiloOrganizations = kiloOrganizations
         self.hooks = hooks
     }
 }

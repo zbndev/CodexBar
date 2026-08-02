@@ -104,6 +104,14 @@ public final class SettingsWindow: @unchecked Sendable {
                 } catch {
                     coordinator.reportError("Could not select the Codex account.")
                 }
+            case .refreshKiloOrganizations:
+                Task { await coordinator.refreshKiloOrganizations() }
+            case let .setKiloOrganizationEnabled(id, enabled):
+                do {
+                    try coordinator.setKiloOrganizationEnabled(id: id, enabled: enabled)
+                } catch {
+                    coordinator.reportError("Could not save Kilo organization settings.")
+                }
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(

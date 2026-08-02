@@ -18,6 +18,40 @@ import Testing
     #expect(decoded == original)
 }
 
+@Test func `Kilo organization commands round-trip through JSON`() throws {
+    let commands: [BridgeCommand] = [
+        .refreshKiloOrganizations,
+        .setKiloOrganizationEnabled(id: "fixture-org", enabled: true),
+    ]
+    for command in commands {
+        #expect(try JSONDecoder().decode(
+            BridgeCommand.self,
+            from: JSONEncoder().encode(command)) == command)
+    }
+}
+
+@Test func `Kilo organization payload round-trips through JSON`() throws {
+    let view = ProviderView(
+        id: "kilo:org:fixture-org",
+        displayName: "Kilo — Fixture Organization",
+        iconResourceName: "kilo",
+        accentColorHex: "#000000",
+        enabled: true)
+    let payload = KiloOrganizationsPayload(
+        organizations: [KiloOrganization(id: "fixture-org", name: "Fixture Organization", role: "admin")],
+        enabledIDs: ["fixture-org"],
+        scopes: [KiloScopeView(
+            id: "org:fixture-org",
+            title: "Fixture Organization",
+            view: view,
+            errorMessage: nil)],
+        isRefreshing: false,
+        errorMessage: nil)
+    #expect(try JSONDecoder().decode(
+        KiloOrganizationsPayload.self,
+        from: JSONEncoder().encode(payload)) == payload)
+}
+
 @Test func `commands decode from the wire format the web UI sends`() throws {
     let json = #"{"type":"selectProvider","id":"claude"}"#
     let decoded = try JSONDecoder().decode(BridgeCommand.self, from: Data(json.utf8))

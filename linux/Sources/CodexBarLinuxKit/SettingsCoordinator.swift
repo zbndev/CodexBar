@@ -15,15 +15,41 @@ public final class SettingsCoordinator: @unchecked Sendable {
     private let configStore: CodexBarConfigStore
     private let settingsStore: LinuxSettingsStore
     private let onChange: @Sendable () -> Void
+    private let kiloOrganizationFetch: @Sendable (String, [String: String]) async throws -> [KiloOrganization]
+    public let kiloOrganizations: KiloOrganizationsState
 
     public init(
         configStore: CodexBarConfigStore,
         settingsStore: LinuxSettingsStore,
+        kiloOrganizations: KiloOrganizationsState? = nil,
+        kiloOrganizationFetch: @escaping @Sendable (String, [String: String]) async throws -> [KiloOrganization] = {
+            apiKey, environment in
+            try await KiloUsageFetcher.fetchOrganizations(apiKey: apiKey, environment: environment)
+        },
         onChange: @escaping @Sendable () -> Void)
     {
         self.configStore = configStore
         self.settingsStore = settingsStore
         self.onChange = onChange
+        self.kiloOrganizationFetch = kiloOrganizationFetch
+        let config = try? configStore.load()
+        let provider = config?.providerConfig(for: .kilo)
+        let organizations = provider?.kiloKnownOrganizations ?? []
+        let enabledIDs = (provider?.kiloEnabledOrganizationIDs ?? []).filter { id in
+            organizations.contains(where: { $0.id == id })
+        }
+        if let kiloOrganizations {
+            self.kiloOrganizations = kiloOrganizations
+            if kiloOrganizations.payload().organizations.isEmpty,
+               kiloOrganizations.payload().scopes.isEmpty
+            {
+                kiloOrganizations.replace(organizations: organizations, enabledIDs: enabledIDs)
+            }
+        } else {
+            self.kiloOrganizations = KiloOrganizationsState(payload: KiloOrganizationsPayload(
+                organizations: organizations,
+                enabledIDs: enabledIDs))
+        }
     }
 
     public func linuxSettings() -> LinuxSettings {
@@ -46,6 +72,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
             general: GeneralPaneCatalog.panes(settings: settings, hooks: hooks),
             providers: panes,
             managedCodexAccounts: self.managedCodexAccountViews(config: config),
+            kiloOrganizations: self.kiloOrganizations.payload(),
             hooks: hooks,
             localization: LocalizationCatalog.load(locale: settings.language))
     }
@@ -100,6 +127,61 @@ public final class SettingsCoordinator: @unchecked Sendable {
         }
     }
 
+    public func refreshKiloOrganizations() async {
+        let config = try? self.configStore.load()
+        let provider = config?.providerConfig(for: .kilo)
+        let source = Self.kiloSourceMode(provider?.source)
+        let environment = ProcessInfo.processInfo.environment
+
+        self.kiloOrganizations.beginRefresh()
+        self.onChange()
+
+        do {
+            let token = try KiloBearerTokenResolver.resolve(
+                source: source,
+                apiKey: provider?.sanitizedAPIKey,
+                environment: environment)
+            let result = try await KiloOrganizationCoordinator(fetch: {
+                try await self.kiloOrganizationFetch(token.token, environment)
+            }).refresh(previousEnabledIDs: provider?.kiloEnabledOrganizationIDs ?? [])
+            try self.updateProvider(id: UsageProvider.kilo.rawValue, mutation: { entry in
+                entry.kiloKnownOrganizations = result.organizations.isEmpty ? nil : result.organizations
+                entry.kiloEnabledOrganizationIDs = result.enabledIDs.isEmpty ? nil : result.enabledIDs
+            }, didPersist: {
+                self.kiloOrganizations.replace(
+                    organizations: result.organizations,
+                    enabledIDs: result.enabledIDs)
+            })
+        } catch {
+            self.kiloOrganizations.failRefresh()
+            self.onChange()
+        }
+    }
+
+    public func setKiloOrganizationEnabled(id: String, enabled: Bool) throws {
+        let current = self.kiloOrganizations.payload()
+        guard current.organizations.contains(where: { $0.id == id }) else { return }
+        var enabledIDs = current.enabledIDs.filter { candidate in
+            current.organizations.contains(where: { $0.id == candidate })
+        }
+        if enabled {
+            if !enabledIDs.contains(id) {
+                enabledIDs.append(id)
+            }
+        } else {
+            enabledIDs.removeAll { $0 == id }
+        }
+        try self.updateProvider(id: UsageProvider.kilo.rawValue, mutation: { entry in
+            entry.kiloKnownOrganizations = current.organizations.isEmpty ? nil : current.organizations
+            entry.kiloEnabledOrganizationIDs = enabledIDs.isEmpty ? nil : enabledIDs
+        }, didPersist: {
+            self.kiloOrganizations.replace(
+                organizations: current.organizations,
+                enabledIDs: enabledIDs,
+                scopes: current.scopes)
+        })
+    }
+
     public func managedCodexAccountsDidChange() {
         self.onChange()
     }
@@ -118,7 +200,8 @@ public final class SettingsCoordinator: @unchecked Sendable {
 
     private func updateProvider(
         id: String,
-        mutation: (inout ProviderConfig) -> Void) throws
+        mutation: (inout ProviderConfig) -> Void,
+        didPersist: (() -> Void)? = nil) throws
     {
         guard let provider = UsageProvider(rawValue: id) else {
             throw CoordinatorError.unknownProvider(id)
@@ -133,7 +216,19 @@ public final class SettingsCoordinator: @unchecked Sendable {
         }
         mutation(&config.providers[index])
         try self.configStore.save(config)
+        didPersist?()
         self.onChange()
+    }
+
+    private static func kiloSourceMode(_ source: ProviderSourceMode?) -> KiloUsageDataSource {
+        switch source {
+        case .api:
+            .api
+        case .cli:
+            .cli
+        case .auto, .web, .oauth, nil:
+            .auto
+        }
     }
 
     public func applyHooks(_ hooks: HooksConfig) throws {

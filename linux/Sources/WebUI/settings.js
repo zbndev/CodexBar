@@ -264,6 +264,9 @@ function renderRows(container, rows, providerID) {
       case 'quotaWarnings':
         renderQuotaWarnings(container, row.providerID);
         break;
+      case 'organizations':
+        renderKiloOrganizations(container, row.providerID);
+        break;
     }
   }
 
@@ -524,6 +527,60 @@ function renderManagedCodexAccounts(container, providerID) {
   const add = pushButton('Add account', 'primary');
   add.addEventListener('click', () => bridge.send({ type: 'addManagedCodexAccount' }));
   container.appendChild(actionRow(useSystem, add));
+}
+
+function renderKiloOrganizations(container, providerID) {
+  if (providerID !== 'kilo') return;
+  const payload = state.payload.kiloOrganizations || {
+    organizations: [], enabledIDs: [], scopes: [], isRefreshing: false, errorMessage: null,
+  };
+  container.appendChild(sectionTitle('Organizations'));
+
+  const refresh = pushButton(payload.isRefreshing ? 'Refreshing organizations…' : 'Refresh organizations');
+  refresh.disabled = payload.isRefreshing;
+  refresh.addEventListener('click', () => bridge.send({ type: 'refreshKiloOrganizations' }));
+  container.appendChild(actionRow(refresh));
+
+  if (payload.errorMessage) {
+    const error = document.createElement('div');
+    error.className = 'state is-error';
+    error.textContent = payload.errorMessage;
+    container.appendChild(error);
+  }
+
+  for (const organization of payload.organizations) {
+    const enabled = document.createElement('input');
+    enabled.type = 'checkbox';
+    enabled.checked = payload.enabledIDs.includes(organization.id);
+    enabled.addEventListener('change', () => {
+      bridge.send({
+        type: 'setKiloOrganizationEnabled', id: organization.id, enabled: enabled.checked,
+      });
+    });
+    const title = organization.role ? `${organization.name} (${organization.role})` : organization.name;
+    container.appendChild(labeledRow(title, () => enabled));
+  }
+
+  for (const scope of payload.scopes) {
+    const card = document.createElement('div');
+    card.className = 'collection-card';
+    card.appendChild(sectionTitle(scope.title));
+    if (scope.errorMessage) {
+      const error = document.createElement('div');
+      error.className = 'state is-error';
+      error.textContent = scope.errorMessage;
+      card.appendChild(error);
+    } else if (scope.view) {
+      for (const window of scope.view.windows) {
+        card.appendChild(labeledRow(window.title, () => {
+          const value = document.createElement('span');
+          value.textContent = window.resetDescription || `${Math.round(window.usedPercent)}% used`;
+          return value;
+        }));
+      }
+    }
+    container.appendChild(card);
+  }
 }
 
 function renderQuotaWarnings(container, providerID) {

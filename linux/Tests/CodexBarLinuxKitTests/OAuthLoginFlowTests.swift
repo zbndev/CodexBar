@@ -56,6 +56,32 @@ private let codes = PKCECodes(verifier: "v-value", challenge: "c-value", state: 
     #expect(url.contains("scope=read%20write") || url.contains("scope=read+write"))
 }
 
+@Test func `the redirect uri is escaped rather than left bare in the query`() {
+    // `:` and `/` are legal in a query component, so URLComponents leaves them
+    // alone and the redirect_uri goes out as `http://host:port/callback`.
+    // Claude's authorize endpoint answers "Invalid request format" to that.
+    // The reference is the Claude CLI, which builds the URL with
+    // URLSearchParams and therefore escapes them.
+    let url = OAuthLoginFlow.authorizeURL(
+        profile: formProfile,
+        codes: codes,
+        redirectURI: "http://127.0.0.1:5555/callback")
+    #expect(url.contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A5555%2Fcallback"))
+    #expect(!url.contains("redirect_uri=http://"))
+}
+
+@Test func `an escaped authorize url still parses back to the original values`() {
+    let url = OAuthLoginFlow.authorizeURL(
+        profile: formProfile,
+        codes: codes,
+        redirectURI: "http://127.0.0.1:5555/callback")
+    let components = URLComponents(string: url)!
+    let items = Dictionary(
+        uniqueKeysWithValues: (components.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+    #expect(items["redirect_uri"] == "http://127.0.0.1:5555/callback")
+    #expect(items["scope"] == "read write")
+}
+
 @Test func `a form token request posts urlencoded fields`() throws {
     let request = try OAuthLoginFlow.tokenRequest(
         profile: formProfile,

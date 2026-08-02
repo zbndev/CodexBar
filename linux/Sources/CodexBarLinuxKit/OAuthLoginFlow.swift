@@ -226,8 +226,27 @@ public struct OAuthLoginFlow: Sendable {
         for key in profile.extraAuthorizeParameters.keys.sorted() {
             items.append(URLQueryItem(name: key, value: profile.extraAuthorizeParameters[key]))
         }
-        components.queryItems = items
+        // Escaped by hand for the same reason `formEncoded` exists: assigning
+        // `queryItems` escapes for a URL query component, where `:` and `/` are
+        // legal, so `redirect_uri` would go out bare as
+        // `http://localhost:5555/callback`. The Claude CLI builds this URL with
+        // `URLSearchParams`, which escapes them, and Claude's authorize
+        // endpoint answers "Invalid request format" to the bare form.
+        components.percentEncodedQuery = items
+            .map { "\(Self.percentEscaped($0.name))=\(Self.percentEscaped($0.value ?? ""))" }
+            .joined(separator: "&")
         return components.url?.absoluteString ?? profile.authorizeURL
+    }
+
+    /// Percent-encodes against RFC 3986's *unreserved* set, so the result is
+    /// safe both as a query value and as a form field.
+    ///
+    /// A space becomes `%20` rather than `+`: `+` only means a space under
+    /// form-urlencoded rules, while `%20` decodes to one under every reading.
+    static func percentEscaped(_ value: String) -> String {
+        let unreserved = CharacterSet(
+            charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: unreserved) ?? value
     }
 
     public static func tokenRequest(
@@ -274,14 +293,9 @@ public struct OAuthLoginFlow: Sendable {
     /// `+` would reach the server decoded as a space. A form body has to escape
     /// everything outside `A-Za-z0-9-._~`.
     static func formEncoded(_ fields: [String: String]) -> String {
-        let unreserved = CharacterSet(
-            charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-        func escape(_ value: String) -> String {
-            value.addingPercentEncoding(withAllowedCharacters: unreserved) ?? value
-        }
         // Sorted so the body is reproducible and the tests can pin it.
-        return fields.keys.sorted()
-            .map { "\(escape($0))=\(escape(fields[$0] ?? ""))" }
+        fields.keys.sorted()
+            .map { "\(Self.percentEscaped($0))=\(Self.percentEscaped(fields[$0] ?? ""))" }
             .joined(separator: "&")
     }
 

@@ -204,12 +204,23 @@ public struct LoginPhasePayload: Codable, Equatable, Sendable {
     public var url: String?
     public var code: String?
     public var message: String?
+    public var command: String?
+    public var helpURL: String?
 
-    public init(phase: String, url: String? = nil, code: String? = nil, message: String? = nil) {
+    public init(
+        phase: String,
+        url: String? = nil,
+        code: String? = nil,
+        message: String? = nil,
+        command: String? = nil,
+        helpURL: String? = nil)
+    {
         self.phase = phase
         self.url = url
         self.code = code
         self.message = message
+        self.command = command
+        self.helpURL = helpURL
     }
 
     public init(_ phase: LoginPhase) {
@@ -226,6 +237,8 @@ public struct LoginPhasePayload: Codable, Equatable, Sendable {
             self.init(phase: "exchanging")
         case .saving:
             self.init(phase: "saving")
+        case let .waitingForExternalTool(command, helpURL):
+            self.init(phase: "waitingForExternalTool", command: command, helpURL: helpURL)
         case .finished:
             self.init(phase: "finished")
         case let .failed(message):

@@ -387,6 +387,12 @@ function renderLoginProgress(container, providerID) {
       urlLink(progress.url, progress.url),
       ': ',
       code);
+  } else if (progress.phase === 'waitingForExternalTool') {
+    text.append(
+      'Complete sign-in in ',
+      Object.assign(document.createElement('code'), { textContent: progress.command }),
+      '. ',
+      urlLink(progress.helpURL, t('linux.settings.open')));
   } else {
     text.textContent = t(`linux.login.${progress.phase}`);
     // Reopening the page is the only recovery when the user closes it.

@@ -13,6 +13,7 @@ public enum LoginRoute: Sendable {
         save: @Sendable (OAuthTokens) throws -> Void)
     case deviceFlow
     case embeddedCookie(CookieLoginEntry)
+    case externalCredential(ExternalCredentialLoginEntry)
 }
 
 /// The single lookup behind the pane's "Sign in" button and the coordinator's
@@ -45,6 +46,9 @@ public enum LoginCatalog {
             return .oauth(profile: login.profile, title: login.title, save: login.save)
         }
         if provider == .copilot { return .deviceFlow }
+        if let entry = ExternalCredentialLogin.catalog[provider] {
+            return .externalCredential(entry)
+        }
         if let entry = ProviderLoginCatalog.entry(for: provider) {
             return .embeddedCookie(entry)
         }
@@ -57,6 +61,7 @@ public enum LoginCatalog {
         case let .oauth(_, title, _): title
         case .deviceFlow: "Sign in with GitHub"
         case .embeddedCookie: "Sign in…"
+        case let .externalCredential(entry): entry.title
         case nil: nil
         }
     }

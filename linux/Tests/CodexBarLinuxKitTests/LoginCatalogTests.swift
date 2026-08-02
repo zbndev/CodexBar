@@ -27,13 +27,13 @@ import Testing
     }
 }
 
-@Test func `oauth providers without a linux client stay out of the catalog`() {
-    // Discovery 4: no obtainable OAuth client on Linux, so nothing to verify
-    // a login against. M5 owns these.
+@Test func `Google providers route to official external credential tools`() {
     for provider: UsageProvider in [.gemini, .antigravity, .vertexai] {
-        if case .some = LoginCatalog.route(for: provider) {
-            Issue.record("\(provider.rawValue) must stay out of the catalog in M4")
+        guard case let .externalCredential(entry) = LoginCatalog.route(for: provider) else {
+            Issue.record("\(provider.rawValue) should route to its official credential tool")
+            return
         }
+        #expect(entry.provider == provider)
     }
 }
 
@@ -82,6 +82,10 @@ import Testing
     #expect(LoginPhasePayload(.saving).phase == "saving")
     #expect(LoginPhasePayload(.finished).phase == "finished")
     #expect(LoginPhasePayload(.failed(message: "boom")).message == "boom")
+    #expect(LoginPhasePayload(.waitingForExternalTool(
+        command: "gcloud auth application-default login",
+        helpURL: "https://docs.cloud.google.com/docs/authentication/application-default-credentials")).helpURL
+        == "https://docs.cloud.google.com/docs/authentication/application-default-credentials")
 }
 
 @Test func `the payload round-trips and has nowhere to hide a credential`() throws {
@@ -92,5 +96,5 @@ import Testing
     let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
     // The wire keys are exactly these. A token or cookie header has no field
     // to travel in — that is the secrets constraint made structural.
-    #expect(Set(object.keys).isSubset(of: ["phase", "url", "code", "message"]))
+    #expect(Set(object.keys).isSubset(of: ["phase", "url", "code", "message", "command", "helpURL"]))
 }

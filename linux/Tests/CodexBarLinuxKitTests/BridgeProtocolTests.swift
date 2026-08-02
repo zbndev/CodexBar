@@ -160,6 +160,16 @@ import Testing
     #expect(try JSONDecoder().decode(BridgeEvent.self, from: data) == event)
 }
 
+@Test func `external credential login progress round trips`() throws {
+    let event = BridgeEvent.loginProgress(
+        provider: "vertexai",
+        phase: LoginPhasePayload(.waitingForExternalTool(
+            command: "gcloud auth application-default login",
+            helpURL: "https://docs.cloud.google.com/docs/authentication/application-default-credentials")))
+    let data = try JSONEncoder().encode(event)
+    #expect(try JSONDecoder().decode(BridgeEvent.self, from: data) == event)
+}
+
 @Test func `an undecodable message never echoes its body`() throws {
     // The shape settings.js sends when the user pastes a cookie header, with
     // one field the wrong type so decoding fails.

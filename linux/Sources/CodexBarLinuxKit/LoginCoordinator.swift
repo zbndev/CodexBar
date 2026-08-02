@@ -24,6 +24,7 @@ public final class LoginCoordinator: @unchecked Sendable {
 
     private var activeTasks: [UsageProvider: Task<Void, Never>] = [:]
     private var cookieWindows: [UsageProvider: CookieLoginWindow] = [:]
+    private var externalProcesses: [UsageProvider: any ExternalProcessHandle] = [:]
 
     public init(application: GtkApplication, settings: SettingsCoordinator) {
         self.application = application
@@ -42,6 +43,8 @@ public final class LoginCoordinator: @unchecked Sendable {
             self.startDeviceFlow(provider: provider)
         case let .embeddedCookie(entry):
             self.startCookieLogin(provider: provider, entry: entry)
+        case let .externalCredential(entry):
+            self.startExternalCredentialLogin(provider: provider, entry: entry)
         }
     }
 
@@ -51,10 +54,71 @@ public final class LoginCoordinator: @unchecked Sendable {
     /// no longer in `activeTasks`.
     public func cancel(_ provider: UsageProvider) {
         self.activeTasks.removeValue(forKey: provider)?.cancel()
+        self.externalProcesses.removeValue(forKey: provider)?.terminate()
         // A cookie window cancelled from the settings UI is marked dead; its
         // late "Save session" is dropped by the guard in the onFinish closure.
         self.cookieWindows.removeValue(forKey: provider)
         self.report(provider, .failed(message: LoginError.cancelled.message))
+    }
+
+    // MARK: - Official external credential tools
+
+    private func startExternalCredentialLogin(provider: UsageProvider, entry: ExternalCredentialLoginEntry) {
+        let task = Task { [weak self] in
+            guard let self else { return }
+            let initialReadiness = await entry.readiness()
+            do {
+                try Task.checkCancellation()
+                switch initialReadiness {
+                case .ready:
+                    self.complete(provider)
+                case let .unavailable(executable):
+                    self.report(provider, .waitingForExternalTool(
+                        command: executable,
+                        helpURL: entry.helpURL.absoluteString))
+                    self.stopExternalLogin(provider)
+                case .waiting:
+                    let process = try SystemTerminal.launch(
+                        executable: entry.executableCandidates[0],
+                        arguments: entry.arguments)
+                    MainLoopDispatch.onMainLoop {
+                        guard self.activeTasks[provider] != nil else {
+                            process.terminate()
+                            return
+                        }
+                        self.externalProcesses[provider] = process
+                    }
+                    self.report(provider, .waitingForExternalTool(
+                        command: entry.command,
+                        helpURL: entry.helpURL.absoluteString))
+                    try await self.waitForExternalCredential(entry: entry)
+                    self.complete(provider)
+            }
+            } catch is CancellationError {
+            } catch {
+                self.fail(provider, message: error.localizedDescription)
+            }
+        }
+        self.activeTasks[provider] = task
+    }
+
+    private func waitForExternalCredential(entry: ExternalCredentialLoginEntry) async throws {
+        let deadline = Date().addingTimeInterval(600)
+        while true {
+            let remaining = deadline.timeIntervalSinceNow
+            guard remaining > 0 else { break }
+            try await Task.sleep(for: .seconds(min(1, remaining)))
+            if await entry.readiness() == .ready {
+                return
+            }
+        }
+        throw ExternalCredentialLoginError.timedOut
+    }
+
+    private func stopExternalLogin(_ provider: UsageProvider) {
+        MainLoopDispatch.onMainLoop {
+            self.activeTasks.removeValue(forKey: provider)
+        }
     }
 
     // MARK: - OAuth (Claude, Codex)
@@ -155,6 +219,7 @@ public final class LoginCoordinator: @unchecked Sendable {
     private func complete(_ provider: UsageProvider) {
         MainLoopDispatch.onMainLoop {
             self.activeTasks.removeValue(forKey: provider)
+            self.externalProcesses.removeValue(forKey: provider)
             self.onPhase?(provider, .finished)
             self.onFinish?(provider)
         }
@@ -163,6 +228,7 @@ public final class LoginCoordinator: @unchecked Sendable {
     private func fail(_ provider: UsageProvider, message: String) {
         MainLoopDispatch.onMainLoop {
             self.activeTasks.removeValue(forKey: provider)
+            self.externalProcesses.removeValue(forKey: provider)
             self.onPhase?(provider, .failed(message: message))
         }
     }
@@ -170,6 +236,17 @@ public final class LoginCoordinator: @unchecked Sendable {
     private func report(_ provider: UsageProvider, _ phase: LoginPhase) {
         MainLoopDispatch.onMainLoop {
             self.onPhase?(provider, phase)
+        }
+    }
+}
+
+private enum ExternalCredentialLoginError: LocalizedError {
+    case timedOut
+
+    var errorDescription: String? {
+        switch self {
+        case .timedOut:
+            "Sign-in did not complete within 10 minutes."
         }
     }
 }

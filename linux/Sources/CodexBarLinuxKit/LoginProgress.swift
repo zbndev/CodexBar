@@ -16,6 +16,7 @@ public enum LoginPhase: Equatable, Sendable {
     case showingDeviceCode(code: String, url: String)
     case exchanging
     case saving
+    case waitingForExternalTool(command: String, helpURL: String)
     case finished
     case failed(message: String)
 }

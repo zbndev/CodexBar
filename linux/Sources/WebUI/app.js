@@ -302,11 +302,12 @@ function renderProviderBody(detail, provider) {
     section.appendChild(meta);
 
     const series = (provider.history || []).find((candidate) => candidate.windowID === window.id);
-    if (series && series.segments.some((segment) => segment.points.length > 0)) {
+    if (series) {
       const history = document.createElement('div');
       history.className = 'history-chart';
-      CodexBarCharts.renderUtilizationChart(history, series.segments, provider.accentColorHex);
-      section.appendChild(history);
+      if (CodexBarCharts.renderUtilizationChart(history, series.segments, provider.accentColorHex)) {
+        section.appendChild(history);
+      }
     }
 
     detail.appendChild(section);
@@ -424,8 +425,9 @@ function renderCost(detail, provider) {
 
   const chart = document.createElement('div');
   chart.className = 'history-chart';
-  CodexBarCharts.renderCostChart(chart, cost.daily || [], cost.currencyCode, provider.accentColorHex);
-  block.appendChild(chart);
+  if (CodexBarCharts.renderCostChart(chart, cost.daily || [], cost.currencyCode, provider.accentColorHex)) {
+    block.appendChild(chart);
+  }
 
   const source = document.createElement('p');
   source.className = 'cost-note';

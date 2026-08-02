@@ -1,11 +1,12 @@
 // Dependency-free SVG charts: one global, two renderers, no library and no
 // build step — the CSP allows `codexbar:` scripts and nothing else.
 //
-// Both renderers share one layout contract inside viewBox 0 0 320 96: the
-// plot lives between y=8 and y=86, the axis labels sit in the 10px band
-// under it. Every datum is a focusable shape with a title, so keyboard users
-// reach each point and hover users get the same text as a tooltip. Empty
-// input swaps the chart for a bounded copy line instead of drawing anything.
+// Both renderers share one layout contract inside `VIEW_BOX`: the plot lives
+// between PLOT_TOP and PLOT_FLOOR, the axis labels sit in the band under it.
+// Every datum is a focusable shape with a title, so keyboard users reach each
+// point and hover users get the same text as a tooltip. Input too thin to say
+// anything draws nothing and returns false, so the caller can leave the
+// container out of the DOM rather than reserve empty space for it.
 window.CodexBarCharts = (() => {
   const finite = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
   const svg = (name, attributes = {}) => {
@@ -14,9 +15,22 @@ window.CodexBarCharts = (() => {
     return node;
   };
 
-  const PLOT_TOP = 8;
-  const PLOT_FLOOR = 86;
-  const LABEL_Y = 94;
+  // The plot was 96 units tall against a 320-wide viewBox, and with
+  // `width:100%; height:auto` that is ~120px at the popup's width — most of it
+  // empty, because the axis was pinned to 0–100 and real series sit low. The
+  // band under the plot keeps the same 6px labels at the same rendered size.
+  const VIEW_BOX = '0 0 320 40';
+  const PLOT_TOP = 4;
+  const PLOT_FLOOR = 26;
+  const LABEL_Y = 37;
+
+  // Below this a line says nothing a number has not already said, so nothing is
+  // drawn and no space is reserved.
+  const MIN_UTILIZATION_POINTS = 4;
+  // A lone bar is always full height: the scale is derived from it.
+  const MIN_COST_BARS = 2;
+  // Floor on the visible range, so a 0.2-point spread is not magnified to noise.
+  const MIN_SPAN = 10;
 
   // Full ISO timestamps localise; bare yyyy-MM-dd dates are reformatted by
   // hand so a timezone behind UTC cannot shift them back a day.
@@ -34,6 +48,43 @@ window.CodexBarCharts = (() => {
     return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
+  // The visible percentage window. A fixed 0–100 axis buried every real series
+  // at the floor of the plot; this follows the data, never magnifies a spread
+  // below MIN_SPAN, and never leaves 0–100.
+  function utilizationScale(values) {
+    let lo = Math.min(...values);
+    let hi = Math.max(...values);
+    if (hi - lo >= MIN_SPAN) {
+      const pad = (hi - lo) * 0.1;
+      return { lo: Math.max(0, lo - pad), hi: Math.min(100, hi + pad) };
+    }
+    const middle = (lo + hi) / 2;
+    lo = middle - MIN_SPAN / 2;
+    hi = middle + MIN_SPAN / 2;
+    // Shift the window off the edge rather than squashing it, so a series
+    // sitting at 0% or 100% keeps the same vertical scale as any other.
+    if (lo < 0) { hi -= lo; lo = 0; }
+    if (hi > 100) { lo -= hi - 100; hi = 100; }
+    return { lo: Math.max(0, lo), hi: Math.min(100, hi) };
+  }
+
+  // Samples that all land on one calendar day print as times. Three identical
+  // "8/2" labels was the common case for a window that resets every few hours.
+  // Utilization points only: they carry full ISO timestamps, while cost dates
+  // are bare yyyy-MM-dd and must stay on `shortDate`, which reformats them by
+  // hand so a timezone behind UTC cannot shift them back a day.
+  function utilizationLabeller(values) {
+    const dates = values.map((value) => new Date(value));
+    if (dates.some((date) => Number.isNaN(date.getTime()))) return shortDate;
+    const first = dates[0];
+    const sameDay = dates.every((date) =>
+      date.getFullYear() === first.getFullYear()
+      && date.getMonth() === first.getMonth()
+      && date.getDate() === first.getDate());
+    if (!sameDay) return shortDate;
+    return (value) => new Date(value).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  }
+
   // First/middle/last labels, anchored so the end labels can never paint
   // outside the viewBox.
   function appendAxisLabels(chart, labels) {
@@ -43,9 +94,11 @@ window.CodexBarCharts = (() => {
       { index: labels.length - 1, x: 318, anchor: 'end' },
     ];
     const seen = new Set();
+    const printed = new Set();
     for (const { index, x, anchor } of anchors) {
-      if (seen.has(index) || !labels[index]) continue;
+      if (seen.has(index) || !labels[index] || printed.has(labels[index])) continue;
       seen.add(index);
+      printed.add(labels[index]);
       const text = svg('text', {
         x, y: LABEL_Y, 'text-anchor': anchor, class: 'chart-axis-label',
       });
@@ -69,41 +122,40 @@ window.CodexBarCharts = (() => {
 
   function renderUtilizationChart(container, series, accentColor) {
     const points = series.flatMap((segment) => segment.points || []);
-    if (!points.length) {
-      container.textContent = 'No utilization history yet';
-      return;
-    }
+    if (points.length < MIN_UTILIZATION_POINTS) return false;
+
+    const percents = points.map((point) => Math.min(100, Math.max(0, finite(point.usedPercent))));
+    const { lo, hi } = utilizationScale(percents);
+    const span = Math.max(1e-6, hi - lo);
     const chart = svg('svg', {
-      viewBox: '0 0 320 96',
+      viewBox: VIEW_BOX,
       role: 'img',
       tabindex: '0',
       'aria-label': 'Utilization history',
     });
-    const xAt = (index) => points.length === 1 ? 160 : index * 320 / (points.length - 1);
+    const xAt = (index) => index * 320 / (points.length - 1);
     const yAt = (percent) =>
-      PLOT_FLOOR - Math.min(100, Math.max(0, finite(percent))) * (PLOT_FLOOR - PLOT_TOP) / 100;
-    const path = points.map((point, index) =>
-      `${index ? 'L' : 'M'} ${xAt(index)} ${yAt(point.usedPercent)}`).join(' ');
+      PLOT_FLOOR - (Math.min(hi, Math.max(lo, percent)) - lo) * (PLOT_FLOOR - PLOT_TOP) / span;
+    const path = percents.map((percent, index) =>
+      `${index ? 'L' : 'M'} ${xAt(index)} ${yAt(percent)}`).join(' ');
     chart.append(svg('path', { d: path, fill: 'none', stroke: accentColor, 'stroke-width': 2 }));
-    points.forEach((point, index) => {
-      const percent = Math.round(Math.min(100, Math.max(0, finite(point.usedPercent))));
+    percents.forEach((percent, index) => {
       chart.appendChild(focusable(svg('circle', {
-        cx: xAt(index), cy: yAt(point.usedPercent), r: 2.5, fill: accentColor,
-      }), `${percent}% used on ${fullDate(point.capturedAt)}`));
+        cx: xAt(index), cy: yAt(percent), r: 2.5, fill: accentColor,
+      }), `${Math.round(percent)}% used on ${fullDate(points[index].capturedAt)}`));
     });
-    appendAxisLabels(chart, points.map((point) => shortDate(point.capturedAt)));
+    const label = utilizationLabeller(points.map((point) => point.capturedAt));
+    appendAxisLabels(chart, points.map((point) => label(point.capturedAt)));
     container.replaceChildren(chart);
+    return true;
   }
 
   function renderCostChart(container, daily, currencyCode, accentColor) {
-    if (!daily.length) {
-      container.textContent = 'No cost history yet';
-      return;
-    }
+    if (daily.length < MIN_COST_BARS) return false;
     const values = daily.map((entry) => Math.max(0, finite(entry.costUSD)));
     const max = Math.max(1, ...values);
     const chart = svg('svg', {
-      viewBox: '0 0 320 96',
+      viewBox: VIEW_BOX,
       role: 'img',
       tabindex: '0',
       'aria-label': `Daily cost in ${currencyCode}`,
@@ -122,6 +174,7 @@ window.CodexBarCharts = (() => {
     });
     appendAxisLabels(chart, daily.map((entry) => shortDate(entry.date)));
     container.replaceChildren(chart);
+    return true;
   }
 
   // Snapshot currencies are rendered, never converted: M5 has no exchange

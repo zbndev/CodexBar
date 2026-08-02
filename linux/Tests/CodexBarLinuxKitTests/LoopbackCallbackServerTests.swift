@@ -85,3 +85,14 @@ private func get(_ url: URL) async {
     defer { second.close() }
     #expect(first.port != second.port)
 }
+
+@Test func `a waiting request observes cancellation`() async throws {
+    let server = try LoopbackCallbackServer(port: 0, path: "/callback")
+    defer { server.close() }
+    let task = Task { try await server.waitForRequest(timeout: 300) }
+    task.cancel()
+    do {
+        _ = try await task.value
+        Issue.record("expected CancellationError")
+    } catch is CancellationError {}
+}

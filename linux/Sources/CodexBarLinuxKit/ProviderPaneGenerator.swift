@@ -50,6 +50,12 @@ public enum ProviderPaneGenerator {
                 visibleWhen: nil))
         }
 
+        // One lookup, no per-provider switch: the catalog decides whether the
+        // provider has an interactive login at all, and what to call it.
+        if let title = LoginCatalog.buttonTitle(for: descriptor.id) {
+            rows.append(.button(action: "login", title: title))
+        }
+
         if ProviderPaneTraits.extrasToggleProviders.contains(descriptor.id) {
             rows.append(.toggle(
                 key: "extrasEnabled",

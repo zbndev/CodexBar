@@ -119,16 +119,32 @@ public final class LoopbackCallbackServer: @unchecked Sendable {
     /// Requests to any other path are answered `404` and ignored — a browser
     /// commonly asks for `/favicon.ico` right after loading the success page,
     /// and treating that as the callback would abort the login.
+    /// Cancelling the calling task frees the port immediately: the handler
+    /// closes the socket, which wakes the accept loop. `accept` itself cannot
+    /// poll for cancellation — it runs on a detached thread, which inherits no
+    /// task context — so the close is what carries the signal across.
     public func waitForRequest(timeout: TimeInterval) async throws -> Request {
         let deadline = Date().addingTimeInterval(timeout)
-        return try await withCheckedThrowingContinuation { continuation in
-            Thread.detachNewThread { [self] in
-                do {
-                    continuation.resume(returning: try self.accept(until: deadline))
-                } catch {
-                    continuation.resume(throwing: error)
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            do {
+                return try await withCheckedThrowingContinuation { continuation in
+                    Thread.detachNewThread { [self] in
+                        do {
+                            continuation.resume(returning: try self.accept(until: deadline))
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    }
                 }
+            } catch {
+                // A cancellation-driven close surfaces as `.closed`; report the
+                // real reason so callers can tell it from a genuine failure.
+                if Task.isCancelled { throw CancellationError() }
+                throw error
             }
+        } onCancel: {
+            self.close()
         }
     }
 

@@ -138,3 +138,24 @@ import Testing
         ProviderSnapshotPayload.self,
         from: encoder.encode(original)) == original)
 }
+
+@Test func `start login and cancel login commands round trip`() throws {
+    let start = BridgeCommand.startLogin(provider: "claude")
+    let data = try JSONEncoder().encode(start)
+    #expect(String(decoding: data, as: UTF8.self).contains("\"startLogin\""))
+    #expect(try JSONDecoder().decode(BridgeCommand.self, from: data) == start)
+
+    let cancel = BridgeCommand.cancelLogin(provider: "claude")
+    let cancelData = try JSONEncoder().encode(cancel)
+    #expect(try JSONDecoder().decode(BridgeCommand.self, from: cancelData) == cancel)
+}
+
+@Test func `the login progress event round trips`() throws {
+    let event = BridgeEvent.loginProgress(
+        provider: "copilot",
+        phase: LoginPhasePayload(.showingDeviceCode(
+            code: "ABCD-1234", url: "https://github.com/login/device")))
+    let data = try JSONEncoder().encode(event)
+    #expect(String(decoding: data, as: UTF8.self).contains("\"loginProgress\""))
+    #expect(try JSONDecoder().decode(BridgeEvent.self, from: data) == event)
+}

@@ -17,6 +17,7 @@ public final class SettingsWindow: @unchecked Sendable {
     public init(
         application: GtkApplication,
         coordinator: SettingsCoordinator,
+        loginCoordinator: LoginCoordinator,
         registerSink: (@escaping @Sendable (SettingsPayload) -> Void) -> Void,
         onRefresh: @escaping @Sendable () -> Void,
         onQuit: @escaping @Sendable () -> Void)
@@ -65,6 +66,15 @@ public final class SettingsWindow: @unchecked Sendable {
                 } catch {
                     coordinator.reportError("Could not save quota warnings: \(error)")
                 }
+            case let .startLogin(providerID):
+                guard let provider = UsageProvider(rawValue: providerID) else {
+                    coordinator.reportError("Unknown provider: \(providerID)")
+                    return
+                }
+                loginCoordinator.start(provider)
+            case let .cancelLogin(providerID):
+                guard let provider = UsageProvider(rawValue: providerID) else { return }
+                loginCoordinator.cancel(provider)
             case .openConfigFolder:
                 MainLoopDispatch.onMainLoop {
                     SystemBrowser.openPath(
@@ -85,6 +95,11 @@ public final class SettingsWindow: @unchecked Sendable {
         self.window.setChild(self.webView.widgetPointer)
         self.window.setHideOnClose(true)
         registerSink { [weak self] payload in self?.bridge.send(.settings(payload)) }
+        loginCoordinator.onPhase = { [weak self] provider, phase in
+            self?.bridge.send(.loginProgress(
+                provider: provider.rawValue,
+                phase: LoginPhasePayload(phase)))
+        }
         coordinator.onError = { [weak self] message in self?.bridge.send(.error(message: message)) }
     }
 

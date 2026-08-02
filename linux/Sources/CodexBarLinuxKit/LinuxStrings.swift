@@ -22,5 +22,13 @@ public enum LinuxStrings {
         "linux.settings.systemLanguage": "System language",
         "linux.settings.saved": "Saved",
         "linux.settings.useGlobal": "Use global defaults",
+        "linux.login.cancel": "Cancel",
+        "linux.login.preparing": "Preparing…",
+        "linux.login.waitingForBrowser": "Finish signing in in the window that just opened.",
+        "linux.login.awaitingCode": "Paste the code from the provider page.",
+        "linux.login.exchanging": "Exchanging the code…",
+        "linux.login.saving": "Saving…",
+        "linux.login.finished": "Signed in.",
+        "linux.login.enterCodeAt": "Enter this code at",
     ]
 }

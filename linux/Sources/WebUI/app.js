@@ -202,6 +202,7 @@ function renderDetail() {
 
 function renderFooter() {
   document.getElementById('refresh').textContent = t('Refresh');
+  document.getElementById('add-account').textContent = t('Add Account');
   document.getElementById('settings').textContent = t('linux.settings.title');
   document.getElementById('quit').textContent = t('Quit');
 }
@@ -215,6 +216,11 @@ function render() {
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('refresh').addEventListener('click', () => {
     bridge.send({ type: 'refresh', provider: null });
+  });
+  // Deliberately the same command as Settings: the login buttons live in the
+  // provider panes, and deep-linking one from the popup is M5 polish.
+  document.getElementById('add-account').addEventListener('click', () => {
+    bridge.send({ type: 'openSettings' });
   });
   document.getElementById('settings').addEventListener('click', () => {
     bridge.send({ type: 'openSettings' });

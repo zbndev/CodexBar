@@ -2,6 +2,7 @@ const state = {
   payload: null,        // last SettingsPayload
   selectedPane: 'general', // general pane id or 'provider:<id>'
   fieldValues: {},      // providerID -> { rowKey: currentValue } for visibleWhen
+  loginProgress: {},    // providerID -> last LoginPhasePayload
 };
 
 const bridge = {
@@ -24,6 +25,10 @@ const handlers = {
   },
   error(event) {
     showError(event.message);
+  },
+  loginProgress(event) {
+    state.loginProgress[event.provider] = event.payload;
+    render();
   },
   snapshot() {}, refreshStarted() {},
 };
@@ -79,6 +84,14 @@ function sidebarItem(id, title, iconSVG) {
   label.textContent = title;
   item.appendChild(label);
   item.addEventListener('click', () => {
+    // Drop finished/failed lines when the user moves on. They are kept until
+    // then so a result survives the settings republish a successful login
+    // triggers.
+    for (const [providerID, progress] of Object.entries(state.loginProgress)) {
+      if (progress.phase === 'finished' || progress.phase === 'failed') {
+        delete state.loginProgress[providerID];
+      }
+    }
     state.selectedPane = id;
     render();
   });
@@ -192,27 +205,19 @@ function renderRows(container, rows, providerID) {
         break;
       }
       case 'link': {
-        const line = labeledRow(t(row.title), () => {
-          const anchor = document.createElement('a');
-          anchor.href = '#';
-          anchor.textContent = t('linux.settings.open');
-          anchor.addEventListener('click', (click) => {
-            click.preventDefault();
-            bridge.send({ type: 'openURL', url: row.url });
-          });
-          return anchor;
-        });
+        const line = labeledRow(t(row.title), () => urlLink(row.url, t('linux.settings.open')));
         container.appendChild(line);
         break;
       }
       case 'button': {
         const line = labeledRow(t(row.title), () => {
           const button = document.createElement('button');
-          button.textContent = row.title === row.action ? 'Run' : row.action;
-          button.addEventListener('click', () => handleAction(row.action));
+          button.textContent = t(row.title);
+          button.addEventListener('click', () => handleAction(row.action, providerID));
           return button;
         });
         container.appendChild(line);
+        if (row.action === 'login' && providerID) renderLoginProgress(container, providerID);
         break;
       }
       case 'tokenAccounts':
@@ -277,10 +282,63 @@ function applyEdit(providerID, key, value) {
   sendSettingsUpdate();
 }
 
-function handleAction(action) {
+function handleAction(action, providerID) {
   if (action === 'refresh') bridge.send({ type: 'refresh', provider: null });
   if (action === 'quit') bridge.send({ type: 'quit' });
   if (action === 'openConfigFolder') bridge.send({ type: 'openConfigFolder' });
+  if (action === 'login' && providerID) bridge.send({ type: 'startLogin', provider: providerID });
+  if (action === 'cancelLogin' && providerID) bridge.send({ type: 'cancelLogin', provider: providerID });
+}
+
+// An anchor that opens `url` in the real browser. The web view has no network
+// access of its own, so navigation always goes out through the bridge.
+function urlLink(url, text) {
+  const anchor = document.createElement('a');
+  anchor.href = '#';
+  anchor.textContent = text;
+  anchor.addEventListener('click', (click) => {
+    click.preventDefault();
+    bridge.send({ type: 'openURL', url });
+  });
+  return anchor;
+}
+
+function renderLoginProgress(container, providerID) {
+  const progress = state.loginProgress[providerID];
+  if (!progress) return;
+  const line = document.createElement('div');
+  line.className = 'row login-progress';
+  const text = document.createElement('span');
+  text.className = 'login-progress-text';
+
+  if (progress.phase === 'failed') {
+    line.classList.add('login-error');
+    text.textContent = progress.message || 'Login failed.';
+  } else if (progress.phase === 'showingDeviceCode') {
+    const code = document.createElement('code');
+    code.className = 'device-code';
+    code.textContent = progress.code;
+    text.append(
+      t('linux.login.enterCodeAt') + ' ',
+      urlLink(progress.url, progress.url),
+      ': ',
+      code);
+  } else {
+    text.textContent = t(`linux.login.${progress.phase}`);
+    // Reopening the page is the only recovery when the user closes it.
+    if (progress.url) {
+      text.append(' ', urlLink(progress.url, t('linux.settings.open')));
+    }
+  }
+  line.appendChild(text);
+
+  if (progress.phase !== 'finished' && progress.phase !== 'failed') {
+    const cancel = document.createElement('button');
+    cancel.textContent = t('linux.login.cancel');
+    cancel.addEventListener('click', () => handleAction('cancelLogin', providerID));
+    line.appendChild(cancel);
+  }
+  container.appendChild(line);
 }
 
 // --- Dynamic collection editors -------------------------------------------

@@ -103,6 +103,16 @@ body { display: flex; }
 .state { padding: 20px 0; color: var(--fg-dim); }
 .state.is-error { color: #d0453b; }
 
+.login-progress { color: var(--fg-dim); }
+.login-progress .login-progress-text { flex: 1; }
+.login-progress .device-code {
+  font-family: ui-monospace, monospace;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--fg);
+}
+.login-error { color: #d0453b; }
+
 .collection-row { gap: 8px; }
 .collection-row input { min-width: 0; }
 .collection-card {

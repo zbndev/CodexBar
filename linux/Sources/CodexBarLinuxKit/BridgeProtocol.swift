@@ -18,6 +18,8 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
     case openConfigFolder
     case replaceTokenAccounts(providerID: String, data: ProviderTokenAccountData?)
     case updateQuotaWarnings(providerID: String, config: QuotaWarningConfig?)
+    case startLogin(provider: String)
+    case cancelLogin(provider: String)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -70,6 +72,10 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             self = .updateQuotaWarnings(
                 providerID: try container.decode(String.self, forKey: .providerID),
                 config: try container.decodeIfPresent(QuotaWarningConfig.self, forKey: .config))
+        case "startLogin":
+            self = .startLogin(provider: try container.decode(String.self, forKey: .provider))
+        case "cancelLogin":
+            self = .cancelLogin(provider: try container.decode(String.self, forKey: .provider))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -118,6 +124,12 @@ public enum BridgeCommand: Codable, Equatable, Sendable {
             try container.encode("updateQuotaWarnings", forKey: .type)
             try container.encode(providerID, forKey: .providerID)
             try container.encodeIfPresent(config, forKey: .config)
+        case let .startLogin(provider):
+            try container.encode("startLogin", forKey: .type)
+            try container.encode(provider, forKey: .provider)
+        case let .cancelLogin(provider):
+            try container.encode("cancelLogin", forKey: .type)
+            try container.encode(provider, forKey: .provider)
         }
     }
 }
@@ -128,6 +140,7 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
     case refreshStarted(provider: String?)
     case error(message: String)
     case settings(SettingsPayload)
+    case loginProgress(provider: String, phase: LoginPhasePayload)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -148,6 +161,10 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
             self = .error(message: try container.decode(String.self, forKey: .message))
         case "settings":
             self = .settings(try container.decode(SettingsPayload.self, forKey: .payload))
+        case "loginProgress":
+            self = .loginProgress(
+                provider: try container.decode(String.self, forKey: .provider),
+                phase: try container.decode(LoginPhasePayload.self, forKey: .payload))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -171,6 +188,48 @@ public enum BridgeEvent: Codable, Equatable, Sendable {
         case let .settings(payload):
             try container.encode("settings", forKey: .type)
             try container.encode(payload, forKey: .payload)
+        case let .loginProgress(provider, phase):
+            try container.encode("loginProgress", forKey: .type)
+            try container.encode(provider, forKey: .provider)
+            try container.encode(phase, forKey: .payload)
+        }
+    }
+}
+
+/// The Codable wire form of `LoginPhase`. Carries phases, user-visible URLs
+/// and the device code — never a credential (Global Constraints), and the
+/// key-subset test in LoginCatalogTests keeps it that way.
+public struct LoginPhasePayload: Codable, Equatable, Sendable {
+    public var phase: String
+    public var url: String?
+    public var code: String?
+    public var message: String?
+
+    public init(phase: String, url: String? = nil, code: String? = nil, message: String? = nil) {
+        self.phase = phase
+        self.url = url
+        self.code = code
+        self.message = message
+    }
+
+    public init(_ phase: LoginPhase) {
+        switch phase {
+        case .preparing:
+            self.init(phase: "preparing")
+        case let .waitingForBrowser(url):
+            self.init(phase: "waitingForBrowser", url: url)
+        case let .awaitingCode(url):
+            self.init(phase: "awaitingCode", url: url)
+        case let .showingDeviceCode(code, url):
+            self.init(phase: "showingDeviceCode", url: url, code: code)
+        case .exchanging:
+            self.init(phase: "exchanging")
+        case .saving:
+            self.init(phase: "saving")
+        case .finished:
+            self.init(phase: "finished")
+        case let .failed(message):
+            self.init(phase: "failed", message: message)
         }
     }
 }

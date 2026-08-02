@@ -206,3 +206,14 @@ private func rows(
         from: JSONEncoder().encode(payload))
     #expect(decoded == payload)
 }
+
+@Test func `a provider with a login route gets a sign-in button`() {
+    #expect(rows(for: .claude).contains(.button(action: "login", title: "Sign in with Claude")))
+}
+
+@Test func `a provider without a login route gets no button`() {
+    #expect(rows(for: .bedrock).allSatisfy { row in
+        if case .button = row { return false }
+        return true
+    })
+}

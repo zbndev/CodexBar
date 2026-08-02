@@ -49,6 +49,14 @@ public final class SettingsCoordinator: @unchecked Sendable {
             localization: LocalizationCatalog.load(locale: settings.language))
     }
 
+    /// Read-only view of one provider's stored config — the login
+    /// coordinator reads the enterprise host and existing token accounts
+    /// from it before starting a flow.
+    public func providerConfig(id: String) -> ProviderConfig? {
+        // Same load path as payload().
+        (try? self.configStore.load())?.providers.first { $0.id.rawValue == id }
+    }
+
     public func applyProviderPatch(id: String, patch: ProviderConfigPatch) throws {
         guard let provider = UsageProvider(rawValue: id) else {
             throw CoordinatorError.unknownProvider(id)

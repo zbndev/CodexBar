@@ -13,6 +13,7 @@ nonisolated(unsafe) var tray: TrayIndicator?
 nonisolated(unsafe) var store: LinuxUsageStore?
 nonisolated(unsafe) var settingsWindow: SettingsWindow?
 nonisolated(unsafe) var coordinator: SettingsCoordinator?
+nonisolated(unsafe) var loginCoordinator: LoginCoordinator?
 nonisolated(unsafe) var settingsEventSink: (@Sendable (SettingsPayload) -> Void)?
 
 /// Rebuilds the settings payload and pushes it to the settings window, if one
@@ -69,6 +70,14 @@ app.onActivate = {
             }
         })
 
+    let madeLoginCoordinator = LoginCoordinator(application: app, settings: madeCoordinator)
+    madeLoginCoordinator.onFinish = { _ in
+        MainLoopDispatch.onMainLoop {
+            madeCoordinator.republish()
+            madeStore.refreshAll()
+        }
+    }
+
     // One presenter shared by the popup's footer button and the tray menu:
     // the window is built lazily and reused, so its bridge survives a close.
     let presentSettings: @Sendable () -> Void = {
@@ -76,6 +85,7 @@ app.onActivate = {
             settingsWindow = SettingsWindow(
                 application: app,
                 coordinator: madeCoordinator,
+                loginCoordinator: madeLoginCoordinator,
                 registerSink: { settingsEventSink = $0 },
                 onRefresh: { madeStore.refreshAll() },
                 onQuit: { MainLoopDispatch.onMainLoop { app.quit() } })
@@ -112,7 +122,7 @@ app.onActivate = {
             MainLoopDispatch.onMainLoop { presentSettings() }
         // Handled by the settings window's own bridge, never the popup's.
         case .settingsReady, .updateProviderConfig, .updateSettings, .updateHooks, .openConfigFolder,
-             .replaceTokenAccounts, .updateQuotaWarnings:
+             .replaceTokenAccounts, .updateQuotaWarnings, .startLogin, .cancelLogin:
             break
         case .quit:
             app.quit()
@@ -150,6 +160,7 @@ app.onActivate = {
     tray = madeTray
     store = madeStore
     coordinator = madeCoordinator
+    loginCoordinator = madeLoginCoordinator
 
     madeStore.applyRefreshInterval(madeCoordinator.linuxSettings().refreshInterval)
 }

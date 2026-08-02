@@ -83,7 +83,9 @@ app.onActivate = {
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
             var renderedPayload = payload
-                .withAgentSessions(madeAgentSessionsStore.currentPayload())
+                .withAgentSessions(
+                    madeAgentSessionsStore.currentPayload(),
+                    enabled: settings.agentSessionsEnabled)
                 .hidingPersonalInfo(settings.hidePersonalInfo)
             renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
             renderedPayload.display = DisplayPreferences(settings: settings)
@@ -206,7 +208,9 @@ app.onActivate = {
             MainLoopDispatch.onMainLoop {
                 let settings = madeCoordinator.linuxSettings()
                 var renderedPayload = madeStore.currentPayload()
-                    .withAgentSessions(madeAgentSessionsStore.currentPayload())
+                    .withAgentSessions(
+                        madeAgentSessionsStore.currentPayload(),
+                        enabled: settings.agentSessionsEnabled)
                     .hidingPersonalInfo(settings.hidePersonalInfo)
                 renderedPayload.localization = LocalizationCatalog.load(locale: settings.language)
                 renderedPayload.display = DisplayPreferences(settings: settings)

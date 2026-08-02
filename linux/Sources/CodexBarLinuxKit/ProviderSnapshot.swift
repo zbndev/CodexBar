@@ -205,9 +205,21 @@ public struct ProviderSnapshotPayload: Codable, Equatable, Sendable {
         return copy
     }
 
-    public func withAgentSessions(_ payload: AgentSessionsPayload) -> ProviderSnapshotPayload {
+    /// The Agent Sessions section is opt-in, matching upstream's
+    /// `agentSessionsEnabled` default of `false`. The gate sits here rather
+    /// than in the renderer for the same reason `hidingPersonalInfo` does:
+    /// with the section off the payload is absent, not empty, so project names
+    /// and session ids never cross the bridge at all.
+    ///
+    /// The scan itself is not gated. `.adaptiveAgentAware` refresh feeds on
+    /// `LinuxAgentSessionsStore.lastCodingActivityAt`, and upstream draws the
+    /// same line — see `AgentSessionsStore.localMonitoringEnabled`.
+    public func withAgentSessions(
+        _ payload: AgentSessionsPayload,
+        enabled: Bool) -> ProviderSnapshotPayload
+    {
         var copy = self
-        copy.agentSessions = payload
+        copy.agentSessions = enabled ? payload : nil
         return copy
     }
 }
@@ -218,12 +230,14 @@ public struct DisplayPreferences: Codable, Equatable, Sendable {
     public var usageBarsShowUsed: Bool
     public var resetTimesShowAbsolute: Bool
     public var showCreditsAndExtraUsage: Bool
+    public var costUsageEnabled: Bool
     public var hidePersonalInfo: Bool
 
     public init(settings: LinuxSettings) {
         self.usageBarsShowUsed = settings.usageBarsShowUsed
         self.resetTimesShowAbsolute = settings.resetTimesShowAbsolute
         self.showCreditsAndExtraUsage = settings.showCreditsAndExtraUsage
+        self.costUsageEnabled = settings.costUsageEnabled
         self.hidePersonalInfo = settings.hidePersonalInfo
     }
 }

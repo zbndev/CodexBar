@@ -109,3 +109,33 @@ private struct SampleError: Error {}
     #expect(svg != nil)
     #expect(svg?.contains("<svg") == true)
 }
+
+private func makeAgentSessions() -> AgentSessionsPayload {
+    AgentSessionsPayload(
+        scannedAt: Date(timeIntervalSince1970: 0),
+        sessions: [AgentSessionView(
+            id: "session-1",
+            provider: "claude",
+            state: "active",
+            projectName: "CodexBar",
+            sessionName: "ClaudeProbe",
+            lastActivityAt: Date(timeIntervalSince1970: 0))],
+        errorMessage: nil)
+}
+
+@Test func `a disabled agent sessions section drops the payload rather than emptying it`() {
+    let payload = ProviderSnapshotPayload(
+        generatedAt: Date(timeIntervalSince1970: 0),
+        providers: [])
+    let sessions = makeAgentSessions()
+
+    #expect(payload.withAgentSessions(sessions, enabled: true).agentSessions == sessions)
+    #expect(payload.withAgentSessions(sessions, enabled: false).agentSessions == nil)
+}
+
+@Test func `display preferences carry the cost opt-in to the popup`() {
+    var settings = LinuxSettings()
+    #expect(!DisplayPreferences(settings: settings).costUsageEnabled)
+    settings.costUsageEnabled = true
+    #expect(DisplayPreferences(settings: settings).costUsageEnabled)
+}

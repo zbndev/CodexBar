@@ -7,8 +7,22 @@ public enum ProviderCostState: Codable, Equatable, Sendable {
     case available(ProviderCostView)
 }
 
+public struct CostUsageLoadRequest: Sendable {
+    public let provider: UsageProvider
+    public let config: ProviderConfig
+    public let forceRefresh: Bool
+    public let historyDays: Int
+
+    public init(provider: UsageProvider, config: ProviderConfig, forceRefresh: Bool, historyDays: Int) {
+        self.provider = provider
+        self.config = config
+        self.forceRefresh = forceRefresh
+        self.historyDays = historyDays
+    }
+}
+
 public final class LinuxCostStore: @unchecked Sendable {
-    public typealias Loader = @Sendable (UsageProvider, ProviderConfig, Bool) async throws -> CostUsageTokenSnapshot
+    public typealias Loader = @Sendable (CostUsageLoadRequest) async throws -> CostUsageTokenSnapshot
 
     private struct Request: Equatable {
         let key: String
@@ -25,14 +39,36 @@ public final class LinuxCostStore: @unchecked Sendable {
         self.load = load
     }
 
+    public convenience init() {
+        self.init(load: { request in
+            let environment = UsageRefresher.resolvedEnvironment(
+                base: ProcessInfo.processInfo.environment,
+                provider: request.provider,
+                config: request.config)
+            return try await CostUsageFetcher().loadTokenSnapshot(
+                provider: request.provider,
+                environment: environment,
+                forceRefresh: request.forceRefresh,
+                historyDays: request.historyDays)
+        })
+    }
+
     public func refresh(providerID: String, config: ProviderConfig, forceRefresh: Bool = false) async {
         guard config.enabled == true, config.id.rawValue == providerID else {
             self.lock.withLock { self.states[providerID] = .unavailable }
             return
         }
+        guard Self.supports(config.id) else {
+            self.lock.withLock { self.states[providerID] = .unavailable }
+            return
+        }
         let request = self.startRequest(providerID: providerID, config: config)
         do {
-            let snapshot = try await self.load(config.id, config, forceRefresh)
+            let snapshot = try await self.load(CostUsageLoadRequest(
+                provider: config.id,
+                config: config,
+                forceRefresh: forceRefresh,
+                historyDays: 30))
             let view = ProviderCostView(
                 providerID: providerID,
                 sessionCostUSD: snapshot.sessionCostUSD,
@@ -82,5 +118,20 @@ public final class LinuxCostStore: @unchecked Sendable {
     private static func fingerprint(_ config: ProviderConfig) -> String {
         let data = (try? JSONEncoder().encode(config)) ?? Data()
         return SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func supports(_ provider: UsageProvider) -> Bool {
+        switch provider {
+        case .codex, .claude, .vertexai, .bedrock:
+            true
+        case .cursor:
+            #if os(macOS)
+            true
+            #else
+            false
+            #endif
+        default:
+            false
+        }
     }
 }

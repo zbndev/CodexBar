@@ -11,6 +11,7 @@ nonisolated(unsafe) var webView: WebView?
 nonisolated(unsafe) var bridge: Bridge?
 nonisolated(unsafe) var tray: TrayIndicator?
 nonisolated(unsafe) var store: LinuxUsageStore?
+nonisolated(unsafe) var costStore: LinuxCostStore?
 nonisolated(unsafe) var settingsWindow: SettingsWindow?
 nonisolated(unsafe) var coordinator: SettingsCoordinator?
 nonisolated(unsafe) var loginCoordinator: LoginCoordinator?
@@ -36,9 +37,11 @@ app.onActivate = {
     // Publishing goes through the main loop: snapshots arrive on background
     // tasks, and WebKit may only be touched from the GTK thread.
     let kiloOrganizations = KiloOrganizationsState()
+    let madeCostStore = LinuxCostStore()
     let madeStore = LinuxUsageStore(
         kiloOrganizations: kiloOrganizations,
-        onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } }) { payload in
+        onKiloOrganizationsChange: { MainLoopDispatch.onMainLoop { publishSettings() } },
+        costStore: madeCostStore) { payload in
         MainLoopDispatch.onMainLoop {
             let settings = coordinator?.linuxSettings() ?? LinuxSettings()
             var renderedPayload = payload
@@ -173,6 +176,7 @@ app.onActivate = {
     bridge = madeBridge
     tray = madeTray
     store = madeStore
+    costStore = madeCostStore
     coordinator = madeCoordinator
     loginCoordinator = madeLoginCoordinator
 

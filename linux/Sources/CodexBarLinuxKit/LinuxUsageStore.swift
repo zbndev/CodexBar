@@ -25,6 +25,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private let kiloOrganizations: KiloOrganizationsState
     private let onKiloOrganizationsChange: @Sendable () -> Void
     private let historyStore: LinuxPlanHistoryStore?
+    private let costStore: LinuxCostStore?
     private var defaultHistoryStore: LinuxPlanHistoryStore?
 
     public init(
@@ -32,6 +33,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
         kiloOrganizations: KiloOrganizationsState = KiloOrganizationsState(),
         onKiloOrganizationsChange: @escaping @Sendable () -> Void = {},
         historyStore: LinuxPlanHistoryStore? = nil,
+        costStore: LinuxCostStore? = nil,
         fetch: @escaping ProviderFetch = { descriptor, sourceMode, config, settings in
             await UsageRefresher().fetch(
                 descriptor: descriptor,
@@ -46,6 +48,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.kiloOrganizations = kiloOrganizations
         self.onKiloOrganizationsChange = onKiloOrganizationsChange
         self.historyStore = historyStore
+        self.costStore = costStore
         self.fetch = fetch
         self.onRefreshRecord = onRefreshRecord
         self.onSnapshot = onSnapshot
@@ -90,6 +93,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
         self.lock.unlock()
         self.onSnapshot(self.currentPayload())
         self.recordHistory(record)
+        self.refreshCost(record)
         self.onRefreshRecord(record)
     }
 
@@ -183,6 +187,20 @@ public final class LinuxUsageStore: @unchecked Sendable {
                 self.defaultHistoryStore = try? LinuxPlanHistoryStore()
             }
             return self.defaultHistoryStore
+        }
+    }
+
+    public func costState(providerID: String) -> ProviderCostState? {
+        self.costStore?.state(providerID: providerID)
+    }
+
+    private func refreshCost(_ record: ProviderRefreshRecord) {
+        guard let costStore = self.costStore,
+              let provider = UsageProvider(rawValue: record.view.id),
+              let config = self.loadConfig()?.providerConfig(for: provider)
+        else { return }
+        Task.detached {
+            await costStore.refresh(providerID: record.view.id, config: config)
         }
     }
 

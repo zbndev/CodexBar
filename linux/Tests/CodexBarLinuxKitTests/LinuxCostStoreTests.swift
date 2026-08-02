@@ -7,9 +7,9 @@ import Testing
 private actor DelayedCostLoader {
     private var continuations: [ProviderSourceMode: CheckedContinuation<CostUsageTokenSnapshot, Never>] = [:]
 
-    func load(config: ProviderConfig) async -> CostUsageTokenSnapshot {
+    func load(_ request: CostUsageLoadRequest) async -> CostUsageTokenSnapshot {
         await withCheckedContinuation { continuation in
-            self.continuations[config.source ?? .auto] = continuation
+            self.continuations[request.config.source ?? .auto] = continuation
         }
     }
 
@@ -32,8 +32,8 @@ private actor DelayedCostLoader {
 func `cost store discards a stale generation after provider configuration changes`() async throws {
     // Given
     let loader = DelayedCostLoader()
-    let store = LinuxCostStore(load: { _, config, _ in
-        await loader.load(config: config)
+    let store = LinuxCostStore(load: { request in
+        await loader.load(request)
     })
     let requestA = ProviderConfig(id: .codex, enabled: true, source: .api)
     let requestB = ProviderConfig(id: .codex, enabled: true, source: .cli)

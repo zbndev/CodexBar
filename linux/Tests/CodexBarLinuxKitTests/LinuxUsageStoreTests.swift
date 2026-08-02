@@ -29,6 +29,31 @@ private actor RefreshRecordRecorder {
     }
 }
 
+private actor CostScanRecorder {
+    private var requests: [CostUsageLoadRequest] = []
+    private var waiter: CheckedContinuation<CostUsageLoadRequest, Never>?
+
+    func load(_ request: CostUsageLoadRequest) -> CostUsageTokenSnapshot {
+        self.requests.append(request)
+        self.waiter?.resume(returning: request)
+        self.waiter = nil
+        return CostUsageTokenSnapshot(
+            sessionTokens: nil,
+            sessionCostUSD: nil,
+            last30DaysTokens: nil,
+            last30DaysCostUSD: nil,
+            daily: [],
+            updatedAt: Date(timeIntervalSince1970: 1))
+    }
+
+    func next() async -> CostUsageLoadRequest {
+        if let request = self.requests.last { return request }
+        return await withCheckedContinuation { continuation in
+            self.waiter = continuation
+        }
+    }
+}
+
 @Test func `reconcile adds enabled providers and removes disabled providers`() throws {
     let url = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString)
@@ -105,4 +130,40 @@ private actor RefreshRecordRecorder {
     // Then
     #expect(record.snapshot?.primary?.usedPercent == usage.primary?.usedPercent)
     #expect(payloads.last?.providers.contains(where: { $0.id == "claude" && $0.errorMessage == nil }) == true)
+}
+
+@Test func `enabled refresh starts one automatic thirty day cost scan`() async throws {
+    // Given
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let configStore = CodexBarConfigStore(fileURL: directory.appendingPathComponent("config.json"))
+    try configStore.save(CodexBarConfig(providers: [ProviderConfig(id: .codex, enabled: true)]))
+    let scans = CostScanRecorder()
+    let costStore = LinuxCostStore(load: { request in
+        await scans.load(request)
+    })
+    let usage = UsageSnapshot(primary: nil, secondary: nil, updatedAt: Date(timeIntervalSince1970: 1))
+    let outcome = ProviderFetchOutcome(
+        result: .success(ProviderFetchResult(
+            usage: usage,
+            credits: nil,
+            dashboard: nil,
+            sourceLabel: "Fixture",
+            strategyID: "fixture",
+            strategyKind: .localProbe)),
+        attempts: [])
+    let store = LinuxUsageStore(
+        configStore: configStore,
+        historyStore: try LinuxPlanHistoryStore(directoryURL: directory.appendingPathComponent("history")),
+        costStore: costStore,
+        fetch: { _, _, _, _ in outcome },
+        onSnapshot: { _ in })
+
+    // When
+    store.refresh(providerID: "codex")
+    let request = await scans.next()
+
+    // Then
+    #expect(request.provider == .codex)
+    #expect(request.historyDays == 30)
+    #expect(!request.forceRefresh)
 }

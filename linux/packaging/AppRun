@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# AppImage entry point.
+#
+# This is a *thin* AppImage: it carries the CodexBar binary and its resources,
+# and uses the host's gtk4 and webkitgtk-6.0. See linux/packaging/NOTES.md for
+# the measurement behind that, in short:
+#
+# WebKitGTK execs WebKitNetworkProcess and WebKitWebProcess from a path
+# compiled into libwebkitgtk-6.0.so. `WEBKIT_EXEC_PATH`, the variable that
+# would redirect them, is compiled out of distribution builds
+# (ENABLE(DEVELOPER_MODE)), so a bundled copy of WebKit is never reached and
+# the app dies at startup with "Failed to spawn child process". Bundling
+# WebKit is therefore not possible against a distro-built WebKitGTK, and a
+# thin bundle that works beats a fat one that does not.
+set -euo pipefail
+
+HERE="$(dirname "$(readlink -f "${0}")")"
+
+# Only for anything the AppDir does ship; the host provides gtk4 and webkit.
+export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
+# So the desktop entry and hicolor icon inside the bundle resolve.
+export XDG_DATA_DIRS="$HERE/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+exec "$HERE/usr/lib/codexbar/CodexBarLinux" "$@"

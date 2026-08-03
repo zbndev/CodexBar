@@ -112,6 +112,52 @@ relies on that is a guess — it is declared explicitly instead.
 Everything else on the list arrives with gtk4 or webkitgtk-6.0, which is why
 the declared dependency set is four names rather than twenty-three.
 
+## The AppImage is thin, and could not be otherwise
+
+A self-contained AppImage was built first — `linuxdeploy --plugin gtk`, WebKit's
+libexec directory copied in by hand, `WEBKIT_EXEC_PATH` and
+`WEBKIT_INJECTED_BUNDLE_PATH` exported from `AppRun`. It was 162 MB and it did
+not work. Under Xvfb it died at startup with:
+
+```
+ERROR: Unable to spawn a new child process: Failed to spawn child process
+'/usr/lib/x86_64-linux-gnu/webkitgtk-6.0/WebKitNetworkProcess' (No such file or directory)
+```
+
+That is the compiled-in path, not the bundled one, with `WEBKIT_EXEC_PATH`
+set. The override exists only under `ENABLE(DEVELOPER_MODE)`, which every
+distribution build turns off, so **WebKitGTK cannot be relocated** and no
+amount of bundling reaches it. This is not fixable from the packaging side.
+
+The AppImage is therefore the staged tree plus `AppRun`, packaged by
+`appimagetool` — 43 MB, using the host's gtk4 and webkitgtk-6.0. `linuxdeploy`
+is not used at all: its entire job is copying dependencies in, which is exactly
+what must not happen.
+
+Two further things that a fat bundle would have run into anyway, worth
+recording because they look like bugs and are not:
+
+- The AppImage excludelist deliberately omits `libGL`, `libEGL`, `libGLESv2`,
+  `libdrm`, `libgbm`, `libX11`, `libxcb`, `libwayland-client`, `libexpat`,
+  `libfontconfig`, `libfreetype`, `libfribidi` and `libharfbuzz`. Bundling
+  graphics-driver libraries breaks hardware acceleration on the host. A bare
+  `ubuntu:24.04` container has none of them, which makes it a *worse* smoke
+  test than a container with gtk4 installed, not a better one.
+- WebKit's sandbox needs user namespaces. In an unprivileged container it fails
+  with `bwrap: Creating new namespace failed: Operation not permitted`; that is
+  the container, not the artifact.
+
+### What was and was not verified
+
+Verified headlessly, thin bundle on `debian:13` under Xvfb with a private
+session bus: the app starts, WebKit's sandbox initialises, `xdg-dbus-proxy`
+runs, and the sandboxed WebProcess claims its name on the bus
+(`app.codexbar.linux.Sandboxed.WebProcess-…`) — the process model works.
+
+**Not verified: that the popup visibly renders.** Xvfb has no GPU and WebKit
+falls back through `libEGL warning: DRI2: failed to create screen`. Confirming
+pixels needs a run on a real desktop.
+
 ## Distribution package names
 
 | Library | Debian/Ubuntu | Fedora |

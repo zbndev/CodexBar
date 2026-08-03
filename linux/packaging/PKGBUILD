@@ -1,0 +1,37 @@
+# Personal build recipe. Not submitted to the AUR.
+#
+# Build and install with:
+#   makepkg -si
+#
+# The Swift toolchain comes from the AUR (`swift-bin`); Arch has no official
+# Swift package. It is only needed to build.
+pkgname=codexbar-linux
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="AI coding usage in your tray (Linux GUI for CodexBar)"
+arch=('x86_64')
+url="https://github.com/zbndev/CodexBar"
+license=('MIT')
+depends=('gtk4' 'webkitgtk-6.0' 'glib2' 'curl' 'sqlite')
+makedepends=('swift-bin')
+options=('!strip' '!debug')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/linux-v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$srcdir/CodexBar-linux-v$pkgver"
+    # Statically linked Swift runtime, matching the release binaries: Arch has
+    # no Swift runtime package to depend on.
+    #
+    # SwiftPM fetches swift-crypto here, so makepkg needs network access in
+    # build() — this recipe is not reproducible offline.
+    swift build --package-path linux -c release --static-swift-stdlib
+}
+
+package() {
+    cd "$srcdir/CodexBar-linux-v$pkgver"
+    # stage.sh calls swift build again; after build() that is an incremental
+    # no-op, and sharing one staging script keeps the package layout identical
+    # to the .deb and .rpm rather than a second description that can drift.
+    linux/packaging/stage.sh "$pkgdir"
+}

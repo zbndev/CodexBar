@@ -190,6 +190,48 @@ The constraint that binds this layout: the binary and
 `Sources/CodexBar/Resources`, and refuses to produce a tree with zero of
 either.
 
+## Manual QA
+
+### Done — checkout build, real session (Hyprland/Wayland, quickshell tray)
+
+Verified after M6.3 replaced libayatana, which is the change most likely to
+regress the tray:
+
+- The item registers with the watcher as
+  `:1.N/org/ayatana/appindicator/codexbar`.
+- Every declared property answers over the bus, with the right type:
+  `Menu` is an `o`, `XAyatanaOrderingIndex` a `u`, `ToolTip` a
+  `(sa(iiay)ss)`.
+- `com.canonical.dbusmenu GetLayout` returns the four-item tree.
+- The tray icon appears, and it is the CodexBar icon rather than a stock gauge
+  — confirmed by diffing a screenshot of the tray with the app running against
+  one with it stopped.
+- All four menu items work: show toggles the popup, refresh drives a usage
+  refresh, settings opens its window, quit exits the process.
+- The popup renders: provider strip with brand icons, usage bars, history
+  chart.
+- `XAyatanaLabel` tracks usage — it read `79%` while the popup showed 79%.
+  This host does not draw the label text next to the icon, so what is verified
+  is that the property is correct and updates, not that a panel paints it.
+
+### Outstanding — needs an installed build on a real desktop
+
+None of these can be checked headlessly, and no packaged build has been run on
+a desktop yet:
+
+- [ ] `makepkg -si` from the released `PKGBUILD` builds and installs.
+- [ ] The AppImage's popup visibly renders. The process model is verified (see
+      above), the pixels are not.
+- [ ] Settings opens and provider brand icons appear in the provider panes —
+      this is the installed `LinuxResourceRoot` branch reading
+      `/usr/share/codexbar/resources`.
+- [ ] Switching the language in General changes the interface text — same
+      branch, localization catalogs.
+- [ ] About shows the released version, not `0.0.0-dev`.
+- [ ] "Start CodexBar at login" on creates `~/.config/autostart/codexbar.desktop`
+      with `Exec=/usr/bin/codexbar`; off removes it.
+- [ ] The application appears in the desktop's application menu with its icon.
+
 ## Reproducing these measurements
 
 The container steps use `docker` rather than `podman`, and need

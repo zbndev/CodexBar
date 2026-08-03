@@ -43,6 +43,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
     public var refreshInterval: RefreshInterval
     public var refreshOnOpen: Bool
     public var statusChecksEnabled: Bool
+    public var launchAtLogin: Bool
 
     // Tray
     public var trayLabelStyle: TrayLabelStyle
@@ -83,6 +84,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.refreshInterval = .fiveMinutes
         self.refreshOnOpen = true
         self.statusChecksEnabled = true
+        self.launchAtLogin = false
         self.trayLabelStyle = .highestPercent
         self.usageBarsShowUsed = true
         self.resetTimesShowAbsolute = false
@@ -118,6 +120,7 @@ public struct LinuxSettings: Codable, Equatable, Sendable {
         self.refreshInterval = try value(RefreshInterval.self, .refreshInterval, or: defaults.refreshInterval)
         self.refreshOnOpen = try value(Bool.self, .refreshOnOpen, or: defaults.refreshOnOpen)
         self.statusChecksEnabled = try value(Bool.self, .statusChecksEnabled, or: defaults.statusChecksEnabled)
+        self.launchAtLogin = try value(Bool.self, .launchAtLogin, or: defaults.launchAtLogin)
         self.trayLabelStyle = try value(TrayLabelStyle.self, .trayLabelStyle, or: defaults.trayLabelStyle)
         self.usageBarsShowUsed = try value(Bool.self, .usageBarsShowUsed, or: defaults.usageBarsShowUsed)
         self.resetTimesShowAbsolute = try value(

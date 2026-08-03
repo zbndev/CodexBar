@@ -14,6 +14,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
 
     private let configStore: CodexBarConfigStore
     private let settingsStore: LinuxSettingsStore
+    private let launchAtLogin: LaunchAtLoginStore
     private let onChange: @Sendable () -> Void
     private let kiloOrganizationFetch: @Sendable (String, [String: String]) async throws -> [KiloOrganization]
     private let claudeSwapCoordinator: ClaudeSwapCoordinator
@@ -41,10 +42,12 @@ public final class SettingsCoordinator: @unchecked Sendable {
             LinuxDiagnosticsPayload(diagnostics: [])
         },
         cachePayload: @escaping @Sendable () -> LinuxCachePayload = { LinuxCachePayload() },
+        launchAtLogin: LaunchAtLoginStore = .default(),
         onChange: @escaping @Sendable () -> Void)
     {
         self.configStore = configStore
         self.settingsStore = settingsStore
+        self.launchAtLogin = launchAtLogin
         self.onChange = onChange
         self.kiloOrganizationFetch = kiloOrganizationFetch
         self.claudeSwapCoordinator = claudeSwapCoordinator
@@ -128,6 +131,9 @@ public final class SettingsCoordinator: @unchecked Sendable {
 
     public func applySettings(_ settings: LinuxSettings) throws {
         try self.settingsStore.save(settings)
+        // Best-effort: a read-only or missing autostart directory must not
+        // stop every other preference on the pane from being saved.
+        try? self.launchAtLogin.apply(settings.launchAtLogin)
         self.onChange()
     }
 

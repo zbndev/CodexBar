@@ -132,6 +132,10 @@ app.onActivate = {
             }
         })
 
+    // Repairs an entry whose Exec points at a binary an upgrade moved, and
+    // restores one a user deleted by hand while the preference stayed on.
+    try? LaunchAtLoginStore.default().apply(madeCoordinator.linuxSettings().launchAtLogin)
+
     let madeLoginCoordinator = LoginCoordinator(application: app, settings: madeCoordinator)
     let madeStatusPoller = ProviderStatusPoller(
         statusChecksEnabled: {

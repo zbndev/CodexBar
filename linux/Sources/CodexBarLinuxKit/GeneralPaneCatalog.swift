@@ -109,6 +109,10 @@ public enum GeneralPaneCatalog {
                 key: "statusChecksEnabled",
                 title: "Check provider status",
                 value: settings.statusChecksEnabled),
+            .toggle(
+                key: "launchAtLogin",
+                title: "Start CodexBar at login",
+                value: settings.launchAtLogin),
             .button(action: "refresh", title: "Refresh all providers now"),
             .button(action: "quit", title: "Quit CodexBar"),
         ])

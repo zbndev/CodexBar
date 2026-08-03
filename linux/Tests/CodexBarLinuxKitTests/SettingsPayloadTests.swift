@@ -65,6 +65,12 @@ private final class TestFlag: @unchecked Sendable {
     let coordinator = SettingsCoordinator(
         configStore: configStore,
         settingsStore: settingsStore,
+        // Explicit, not the default: applySettings writes the autostart entry,
+        // and the default store points at the real ~/.config/autostart.
+        launchAtLogin: LaunchAtLoginStore(
+            directory: FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true),
+            executablePath: "/usr/bin/codexbar"),
         onChange: { fired.set() })
     var settings = LinuxSettings()
     settings.refreshInterval = .manual

@@ -13,11 +13,16 @@ import Testing
     }
 }
 
-@Test func `the web-only set is the seventeen the milestone covers`() {
+@Test func `the web-only set is the eighteen currently covered`() {
     // Guards the predicate itself: every descriptor also carries `.auto`, so
     // "web-only" means nothing beyond auto and web — not `sourceModes.count == 1`,
     // which matches nothing at all.
-    #expect(ProviderDescriptorRegistry.webOnly.count == 17)
+    //
+    // The count is a tripwire, not a target: when an upstream sync adds a
+    // web-only provider this fails first, and the two walk-all tests around it
+    // then say exactly what the new provider is missing. Notion arrived that
+    // way and needed a copy entry plus a route in `LinuxSettingsSnapshot`.
+    #expect(ProviderDescriptorRegistry.webOnly.count == 18)
 }
 
 @Test func `every entry is well formed`() {

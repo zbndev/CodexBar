@@ -3,7 +3,7 @@ import Foundation
 
 extension ProviderDescriptorRegistry {
     /// Descriptors whose only real usage source is the provider's web
-    /// dashboard — the 17 the milestone's cookie login covers.
+    /// dashboard — the set the cookie login covers.
     ///
     /// Every descriptor carries `.auto` as well, so "web-only" is "nothing
     /// beyond auto and web". Testing `sourceModes.count == 1` matches nothing
@@ -137,6 +137,15 @@ public enum ProviderCopy {
                 ProviderHelperLink(
                     title: "Open Mistral Admin",
                     url: "https://admin.mistral.ai/organization/usage"),
+            ]),
+        .notion: ProviderCopyEntry(
+            placeholder: "token_v2=\u{2026}",
+            hint: "Paste the Cookie header from a request to app.notion.com. "
+                + "Must contain a token_v2 cookie.",
+            helperLinks: [
+                ProviderHelperLink(
+                    title: "Open Notion",
+                    url: "https://app.notion.com/"),
             ]),
         .openai: ProviderCopyEntry(
             placeholder: "sk-admin-...",

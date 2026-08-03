@@ -46,8 +46,8 @@ public enum LinuxSettingsSnapshot {
         builder.mistral = cookie(.mistral)
         builder.qoder = cookie(.qoder)
 
-        // These three carry the same pair under a different field name or
-        // alongside extra state, so they cannot go through `cookie`.
+        // These carry the same pair under a different field name or alongside
+        // extra state, so they cannot go through `cookie`.
         if let stored = byID[.opencode] {
             builder.opencode = ProviderSettingsSnapshot.OpenCodeProviderSettings(
                 cookieSource: stored.cookieSource ?? .auto,
@@ -66,6 +66,14 @@ public enum LinuxSettingsSnapshot {
             builder.stepfun = ProviderSettingsSnapshot.StepFunProviderSettings(
                 cookieSource: stored.cookieSource ?? .auto,
                 manualToken: stored.sanitizedCookieHeader ?? "")
+        }
+        if let stored = byID[.notion] {
+            // Notion carries an optional space id for accounts in more than
+            // one workspace, so it cannot go through `cookie` either.
+            builder.notion = ProviderSettingsSnapshot.NotionProviderSettings(
+                cookieSource: stored.cookieSource ?? .auto,
+                manualCookieHeader: stored.sanitizedCookieHeader,
+                workspaceID: stored.sanitizedWorkspaceID)
         }
         if let stored = byID[.devin] {
             // Devin's manual credential is an Authorization header value.
@@ -104,6 +112,7 @@ public enum LinuxSettingsSnapshot {
         case .abacus: snapshot.abacus?.manualCookieHeader
         case .mistral: snapshot.mistral?.manualCookieHeader
         case .qoder: snapshot.qoder?.manualCookieHeader
+        case .notion: snapshot.notion?.manualCookieHeader
         case .opencode: snapshot.opencode?.manualCookieHeader
         case .opencodego: snapshot.opencodego?.manualCookieHeader
         case .devin: snapshot.devin?.manualBearerToken

@@ -18,6 +18,7 @@ public enum VeniceProviderDescriptor {
                 toggleTitle: "Show Venice usage",
                 cliName: "venice",
                 defaultEnabled: false,
+                widgetSelectable: false,
                 isPrimaryProvider: false,
                 usesAccountFallback: false,
                 browserCookieOrder: nil,
@@ -25,7 +26,7 @@ public enum VeniceProviderDescriptor {
                 statusPageURL: nil,
                 statusLinkURL: nil),
             branding: ProviderBranding(
-                iconStyle: .venice,
+                iconStyle: .init(provider: .venice),
                 iconResourceName: "ProviderIcon-venice",
                 color: ProviderColor(red: 0.2, green: 0.6, blue: 1.0),
                 confettiPalette: [
@@ -36,16 +37,34 @@ public enum VeniceProviderDescriptor {
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "Venice per-day cost history is not available via API." }),
-            fetchPlan: .apiToken(
-                strategyID: "venice.api",
-                resolveToken: { ProviderTokenResolver.veniceToken(environment: $0) },
-                missingCredentialsError: { VeniceUsageError.missingCredentials },
-                loadUsage: { apiKey, _ in
-                    try await VeniceUsageFetcher.fetchUsage(apiKey: apiKey).toUsageSnapshot()
-                }),
+            fetchPlan: self.fetchPlan(),
             cli: ProviderCLIConfig(
                 name: "venice",
                 aliases: ["ven"],
                 versionDetector: nil))
+    }
+
+    private static func fetchPlan() -> ProviderFetchPlan {
+        #if canImport(JavaScriptCore)
+        .scriptPrototypeAPI(
+            configuration: .init(
+                provider: .venice,
+                plugin: "venice",
+                secretKey: VeniceSettingsReader.apiKeyEnvironmentKey,
+                strategyID: "venice.api"),
+            resolveToken: { ProviderTokenResolver.veniceToken(environment: $0) },
+            missingCredentialsError: { VeniceUsageError.missingCredentials },
+            loadUsage: { apiKey, _ in
+                try await VeniceUsageFetcher.fetchUsage(apiKey: apiKey).toUsageSnapshot()
+            })
+        #else
+        .apiToken(
+            strategyID: "venice.api",
+            resolveToken: { ProviderTokenResolver.veniceToken(environment: $0) },
+            missingCredentialsError: { VeniceUsageError.missingCredentials },
+            loadUsage: { apiKey, _ in
+                try await VeniceUsageFetcher.fetchUsage(apiKey: apiKey).toUsageSnapshot()
+            })
+        #endif
     }
 }

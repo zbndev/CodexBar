@@ -70,6 +70,12 @@ See `docs/configuration.md` for the schema.
   - Kitty, Ghostty, WezTerm, and other truecolor terminals auto-enable enhanced gradients/outlines.
   - Force enhanced mode elsewhere with `CODEXBAR_CARDS_ENHANCED=1`.
   - Exit code is non-zero when any provider fetch fails.
+- `codexbar dashboard` prints one dashboard-v1 JSON snapshot and exits.
+  - Honors enabled providers in stable order, carries configured display sort keys, and always redacts account identity.
+  - Provider failures remain row-level errors alongside healthy rows; a valid partial snapshot exits `0`.
+  - Stdout contains only the snapshot document. Diagnostics and optional `--json-output` logs go to stderr.
+  - `--pretty` formats the document. `--timeout <seconds>` accepts `0...86400`, defaults to `30`, and uses `0` to disable the command deadline.
+  - Starts no HTTP server and requires no dashboard bearer token. See `docs/dashboard-api.md` for the shared payload contract.
 - `codexbar serve` starts a foreground HTTP server for usage and cost JSON plus a token-gated dashboard snapshot.
   - `--host <host>` accepts `localhost` or an IPv4 address and defaults to `127.0.0.1`; `localhost` is normalized to `127.0.0.1`. Binding a non-loopback host requires a dashboard token **and** `--allow-plain-http` (see `docs/dashboard-api.md` for the threat model).
   - `--port <port>` defaults to `8080`.
@@ -140,6 +146,21 @@ See `docs/configuration.md` for the schema.
   commands run directly without a shell and receive `CODEXBAR_*` variables plus JSON on stdin. `--format json` and
   `--json-only` return structured per-rule results. See
   `docs/configuration.md#external-event-hooks` for the event, payload, timeout, and security contract.
+- `codexbar hooks watch` polls enabled providers and fires matching hooks on real quota and status transitions.
+  Without it, hook rules only ever fire from the macOS app, so a headless install can configure hooks that never run.
+  - `--interval <seconds>`: poll period. Default `300`, minimum `60`; a smaller value is rejected rather than
+    clamped, because each tick fetches every selected provider.
+  - `--provider <id>`: restrict to one provider; repeatable. Defaults to every enabled provider.
+  - `--format json`/`--json`/`--pretty`: emit each fired event as JSON.
+  - Events are edge-triggered against the previous poll, so a condition that merely persists (a saturated window,
+    an ongoing outage) does not re-fire every tick. State is in-memory only: a restart re-establishes baselines and
+    the first poll of any lane fires nothing.
+  - Run `watch` as one continuous process. Repeated one-shot invocations cannot preserve transition baselines or event
+    rate limits between polls.
+  - Runs read-only, like `codexbar guard`: it never prompts for credentials. A failed refresh reports
+    `refresh_failed` with a coarse category (`timeout`, `offline`, `auth_required`, `network_error`) and never
+    forwards the raw provider error.
+  - Stops cleanly on `SIGINT`/`SIGTERM`/`SIGHUP`.
 
 ### Token accounts
 The CLI reads multi-account tokens from the same resolved config file as the app.
@@ -180,6 +201,7 @@ codexbar cost --provider codex --group-by project
 codexbar cost --provider claude --format json --pretty
 codexbar guard --provider codex --min-remaining 20 --window weekly --json
 codexbar cost --provider cursor   # Cursor dashboard cost (API-rate + Cursor-metered)
+codexbar dashboard | jq '.providers[] | {id, windows, error}'
 codexbar serve --port 8080        # localhost HTTP JSON server
 codexbar serve --request-timeout 0 # disable serve request deadlines
 CODEXBAR_DASHBOARD_TOKEN=YOUR_TOKEN codexbar serve # token-gated dashboard snapshot
@@ -287,6 +309,9 @@ Note: Using CLI fallback
 - 3: parse/format error
 - 4: CLI timeout
 - 1: unexpected failure
+
+For `codexbar dashboard`, `0` includes a valid partial snapshot whose provider rows contain errors. The command exits
+non-zero only when it cannot produce a valid snapshot document.
 
 ## Notes
 - CLI uses the config file for enabled providers, ordering, and secrets.

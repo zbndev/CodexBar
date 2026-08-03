@@ -25,6 +25,12 @@ struct UsageMenuCardView: View {
         }
 
         struct Metric: Identifiable {
+            struct LinePresentation: Equatable {
+                let titleText: String
+                let resetText: String?
+                let metaText: String?
+            }
+
             let id: String
             let title: String
             let percent: Double
@@ -77,6 +83,25 @@ struct UsageMenuCardView: View {
 
             var percentLabel: String {
                 UsageFormatter.percentText(self.percent, suffix: self.percentStyle.labelSuffix)
+            }
+
+            func linePresentation(title: String) -> LinePresentation {
+                let usedPercent = self.percentStyle == .used ? self.percent : 100 - self.percent
+                let metaParts = [
+                    self.detailLeftText,
+                    self.detailRightText,
+                    self.sessionEquivalentDetail?.leftText,
+                    self.sessionEquivalentDetail?.rightText,
+                ].compactMap { text -> String? in
+                    guard let text = text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+                        return nil
+                    }
+                    return text
+                }
+                return LinePresentation(
+                    titleText: "\(title) \(UsageFormatter.percentString(usedPercent))",
+                    resetText: self.resetText,
+                    metaText: metaParts.isEmpty ? nil : metaParts.joined(separator: " · "))
             }
         }
 
@@ -136,6 +161,7 @@ struct UsageMenuCardView: View {
         let planText: String?
         let metrics: [Metric]
         let usageNotes: [String]
+        var subscriptionNotes: [String] = []
         let openAIAPIUsage: OpenAIAPIUsageSnapshot?
         let inlineUsageDashboard: InlineUsageDashboardModel?
         let creditsText: String?
@@ -475,16 +501,31 @@ private struct MetricRow: View {
     @Environment(\.menuItemHighlighted) private var isHighlighted
 
     var body: some View {
+        let presentation = self.metric.linePresentation(title: self.title)
         VStack(alignment: .leading, spacing: 6) {
-            Text(self.title)
-                .font(.body)
-                .fontWeight(.medium)
             if let statusText = self.metric.statusText {
+                Text(self.title)
+                    .font(.body)
+                    .fontWeight(.medium)
                 Text(statusText)
                     .font(.footnote)
                     .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
                     .lineLimit(1)
             } else {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(presentation.titleText)
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    Spacer(minLength: 8)
+                    if let resetText = presentation.resetText {
+                        Text(resetText)
+                            .font(.footnote)
+                            .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
+                            .lineLimit(1)
+                    }
+                }
                 UsageProgressBar(
                     percent: self.metric.percent,
                     tint: self.progressColor,
@@ -493,53 +534,13 @@ private struct MetricRow: View {
                     paceOnTop: self.metric.paceOnTop,
                     warningMarkerPercents: self.metric.warningMarkerPercents,
                     workdayMarkerPercents: self.metric.workdayMarkerPercents)
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(self.metric.percentLabel)
-                            .font(.footnote)
-                            .lineLimit(1)
-                        Spacer()
-                        if let rightLabel = self.metric.resetText {
-                            Text(rightLabel)
-                                .font(.footnote)
-                                .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
-                                .lineLimit(1)
-                        }
-                    }
-                    if self.metric.detailLeftText != nil || self.metric.detailRightText != nil {
-                        HStack(alignment: .firstTextBaseline) {
-                            if let detailLeft = self.metric.detailLeftText {
-                                Text(detailLeft)
-                                    .font(.footnote)
-                                    .foregroundStyle(MenuHighlightStyle.primary(self.isHighlighted))
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            if let detailRight = self.metric.detailRightText {
-                                Text(detailRight)
-                                    .font(.footnote)
-                                    .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    if let sessionEquivalentDetail = self.metric.sessionEquivalentDetail {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(sessionEquivalentDetail.leftText)
-                                .font(.footnote)
-                                .foregroundStyle(MenuHighlightStyle.primary(self.isHighlighted))
-                                .lineLimit(1)
-                            Spacer()
-                            Text(sessionEquivalentDetail.rightText)
-                                .font(.footnote)
-                                .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
-                                .lineLimit(1)
-                        }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(sessionEquivalentDetail.accessibilityLabel)
-                    }
+                if let metaText = presentation.metaText {
+                    Text(metaText)
+                        .font(.footnote)
+                        .foregroundStyle(MenuHighlightStyle.secondary(self.isHighlighted))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 if let detail = self.metric.detailText {
                     Text(detail)
                         .font(.footnote)
@@ -661,6 +662,9 @@ private struct UsageMenuCardUsageContentView: View {
             }
             if let dashboard = self.model.inlineUsageDashboard {
                 InlineUsageDashboardContent(model: dashboard)
+                if !self.model.subscriptionNotes.isEmpty {
+                    UsageNotesContent(notes: self.model.subscriptionNotes)
+                }
             } else if !self.model.usageNotes.isEmpty {
                 UsageNotesContent(notes: self.model.usageNotes)
             } else if let placeholder = self.model.placeholder, self.model.metrics.isEmpty,
@@ -886,9 +890,9 @@ extension UsageMenuCardView.Model {
         let openAIAPIUsage = input.snapshot?.openAIAPIUsage
         let inlineUsageDashboard = Self.inlineUsageDashboard(input: input)
         let usageNotes = Self.usageNotes(input: input)
-        let rawCreditsText: String? = if input.provider == .openrouter {
-            nil
-        } else if input.codexProjection != nil, !input.showOptionalCreditsAndExtraUsage {
+        let rawCreditsText: String? = if input.provider == .openrouter ||
+            !input.showOptionalCreditsAndExtraUsage
+        {
             nil
         } else {
             Self.creditsLine(
@@ -906,6 +910,7 @@ extension UsageMenuCardView.Model {
             input.snapshot?.claudeAdminAPIUsage != nil
         let isRequiredOpenCodeZenBalance = Self.isRequiredOpenCodeZenBalance(input.snapshot)
         let hidesOptionalProviderCost = ((input.provider == .claude && !isClaudeAdminAPI) ||
+            input.provider == .cursor ||
             input.provider == .factory ||
             input.provider == .devin ||
             (input.provider == .opencodego && !isRequiredOpenCodeZenBalance)) &&
@@ -935,11 +940,12 @@ extension UsageMenuCardView.Model {
             snapshot: tokenUsageSnapshot,
             error: input.tokenError,
             preferredCurrencyCode: input.preferredCurrencyCode)
-        let subtitle = Self.subtitle(
-            snapshot: input.snapshot,
-            isRefreshing: input.isRefreshing,
-            lastError: Self.lastError(input: input),
-            now: input.now)
+        let subtitle = input.subtitleOverride.map { (text: $0, style: SubtitleStyle.info) }
+            ?? Self.subtitle(
+                snapshot: input.snapshot,
+                isRefreshing: input.isRefreshing,
+                lastError: Self.lastError(input: input),
+                now: input.now)
         let redacted = Self.redactedText(input: input, subtitle: subtitle)
         let placeholder = Self.placeholder(input: input)
 
@@ -953,6 +959,7 @@ extension UsageMenuCardView.Model {
             planText: planText,
             metrics: metrics,
             usageNotes: usageNotes,
+            subscriptionNotes: Self.subscriptionMetadataNotes(snapshot: input.snapshot, provider: input.provider),
             openAIAPIUsage: openAIAPIUsage,
             inlineUsageDashboard: inlineUsageDashboard,
             creditsText: creditsText,

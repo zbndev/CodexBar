@@ -132,6 +132,36 @@ extension CodexBarCLI {
         """
     }
 
+    static func dashboardHelp(version: String) -> String {
+        """
+        CodexBar \(version)
+
+        Usage:
+          codexbar dashboard [--pretty] [--timeout <seconds>]
+                             [--json-output] [--log-level <trace|verbose|debug|info|warning|error|critical>]
+                             [-v|--verbose]
+
+        Description:
+          Print one dashboard-v1 snapshot as JSON, then exit. Honors enabled providers
+          in stable order, always redacts account identity, and keeps provider
+          failures as row-level errors without dropping healthy rows.
+          Stdout contains only the JSON document; diagnostics are written to stderr.
+          --timeout accepts 0...86400 seconds and defaults to 30; 0 disables the deadline.
+
+        Global flags:
+          -h, --help      Show help
+          -V, --version   Show version
+          -v, --verbose   Enable verbose logging
+          --log-level <trace|verbose|debug|info|warning|error|critical>
+          --json-output   Emit machine-readable logs (JSONL) to stderr
+
+        Examples:
+          codexbar dashboard
+          codexbar dashboard --pretty
+          codexbar dashboard --timeout 60
+        """
+    }
+
     static func serveHelp(version: String) -> String {
         """
         CodexBar \(version)
@@ -262,6 +292,7 @@ extension CodexBarCLI {
           codexbar hooks enable
           codexbar hooks disable
           codexbar hooks test <event> --provider <name>
+          codexbar hooks watch [--interval <seconds>] [--provider <name>]
 
         Description:
           Run external commands when quota/provider events occur. Rules are stored in the
@@ -272,11 +303,19 @@ extension CodexBarCLI {
           Commands run directly (no shell), receive event metadata via CODEXBAR_* environment
           variables and a JSON payload on stdin, and are timed out. Only configure commands you trust.
 
+          `watch` polls the selected providers and fires rules on real transitions, so hooks
+          work without the macOS app. Events are edge-triggered against the previous poll, so a
+          persisting condition does not re-fire. Baselines are in-memory: the first poll of a
+          lane establishes state without firing. Keep one continuous process running so transition
+          baselines and event rate limits survive between polls. Default interval 300s, minimum 60s.
+
         Examples:
           codexbar hooks list
           codexbar hooks enable
           codexbar hooks test quota_reached --provider codex
           codexbar hooks test quota_low --provider claude
+          codexbar hooks watch --interval 600
+          codexbar hooks watch --provider codex
         """
     }
 
@@ -389,6 +428,7 @@ extension CodexBarCLI {
                        [--days <days>] [--group-by project]
           codexbar sessions [--json] [--pretty]
           codexbar sessions focus <id>
+          codexbar dashboard [--pretty] [--timeout <seconds>]
           codexbar serve [--host <host>] [--port <port>] [--refresh-interval <seconds>]
                        [--request-timeout <seconds>]
                        [--dashboard-token <token>] [--allow-plain-http]
@@ -428,6 +468,7 @@ extension CodexBarCLI {
           codexbar cards --brief
           codexbar cost --provider claude --format json --pretty
           codexbar sessions --json
+          codexbar dashboard --pretty
           codexbar serve --port 8080
           codexbar config validate --format json --pretty
           codexbar config enable --provider grok

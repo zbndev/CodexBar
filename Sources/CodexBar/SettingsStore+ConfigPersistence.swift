@@ -1,8 +1,9 @@
 import CodexBarCore
 import Foundation
 
-private enum ConfigChangeOrigin {
+enum ConfigChangeOrigin: Equatable {
     case localUser
+    case localFile
     case externalSync
 }
 
@@ -15,21 +16,37 @@ private struct ConfigChangeContext {
         Self(origin: .localUser, reason: reason, affectsBackgroundWork: affectsBackgroundWork)
     }
 
-    static func external(reason: String, affectsBackgroundWork: Bool) -> Self {
-        Self(origin: .externalSync, reason: reason, affectsBackgroundWork: affectsBackgroundWork)
+    static func external(
+        origin: ConfigChangeOrigin = .externalSync,
+        reason: String,
+        affectsBackgroundWork: Bool) -> Self
+    {
+        Self(origin: origin, reason: reason, affectsBackgroundWork: affectsBackgroundWork)
     }
 
     var shouldBroadcast: Bool {
-        switch self.origin {
-        case .localUser:
-            true
-        case .externalSync:
-            false
-        }
+        self.origin == .localUser
+    }
+
+    var shouldNotifyCloudSync: Bool {
+        self.origin == .localFile
     }
 }
 
 extension SettingsStore {
+    func startConfigFileWatcher() {
+        let watcher = ConfigFileWatcher(fileURL: self.configStore.fileURL) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.reloadConfig(reason: "file-watch", origin: .localFile)
+            }
+        }
+        if let data = try? Data(contentsOf: self.configStore.fileURL) {
+            watcher.noteAppWrite(data: data)
+        }
+        self.configFileWatcher = watcher
+        watcher.start()
+    }
+
     private func updateConfig(
         reason: String,
         affectsBackgroundWork: Bool,
@@ -137,14 +154,19 @@ extension SettingsStore {
         }
     }
 
-    func reloadConfig(reason: String, affectsBackgroundWork: Bool? = nil) {
+    func reloadConfig(
+        reason: String,
+        affectsBackgroundWork: Bool? = nil,
+        origin: ConfigChangeOrigin = .externalSync)
+    {
         guard !self.configLoading else { return }
         do {
             guard let loaded = try self.configStore.load() else { return }
             self.applyExternalConfig(
                 loaded,
                 reason: "reload-\(reason)",
-                affectsBackgroundWork: affectsBackgroundWork)
+                affectsBackgroundWork: affectsBackgroundWork,
+                origin: origin)
         } catch {
             CodexBarLog.logger(LogCategories.configStore).error("Failed to reload config: \(error)")
         }
@@ -153,7 +175,8 @@ extension SettingsStore {
     func applyExternalConfig(
         _ config: CodexBarConfig,
         reason: String,
-        affectsBackgroundWork: Bool? = nil)
+        affectsBackgroundWork: Bool? = nil,
+        origin: ConfigChangeOrigin = .externalSync)
     {
         guard !self.configLoading else { return }
         let normalized = config.normalized()
@@ -166,6 +189,7 @@ extension SettingsStore {
         self.updateProviderState(config: normalized)
         self.configLoading = false
         self.bumpConfigRevision(.external(
+            origin: origin,
             reason: "sync-\(reason)",
             affectsBackgroundWork: resolvedBackgroundWorkChange))
     }
@@ -203,6 +227,12 @@ extension SettingsStore {
             .debug(
                 "Config revision bumped (\(context.reason)) -> \(self.configRevision)",
                 metadata: ["backgroundWork": context.affectsBackgroundWork ? "1" : "0"])
+        if context.shouldNotifyCloudSync {
+            NotificationCenter.default.post(
+                name: .codexbarLocalConfigFileDidChange,
+                object: self,
+                userInfo: ["reason": context.reason])
+        }
         guard context.shouldBroadcast else { return }
         NotificationCenter.default.post(
             name: .codexbarProviderConfigDidChange,
@@ -225,13 +255,16 @@ extension SettingsStore {
         self.configPersistTask?.cancel()
         if Self.isRunningTests {
             do {
-                try self.configStore.save(self.config)
+                let data = try self.configStore.encodedData(for: self.config)
+                self.configFileWatcher?.noteAppWrite(data: data)
+                try self.configStore.saveEncodedData(data)
             } catch {
                 CodexBarLog.logger(LogCategories.configStore).error("Failed to persist config: \(error)")
             }
             return
         }
         let store = self.configStore
+        let watcher = self.configFileWatcher
         self.configPersistTask = Task { @MainActor in
             do {
                 try await Task.sleep(nanoseconds: 350_000_000)
@@ -240,9 +273,17 @@ extension SettingsStore {
             }
             guard !Task.isCancelled else { return }
             let snapshot = self.config
+            let data: Data
+            do {
+                data = try store.encodedData(for: snapshot)
+                watcher?.noteAppWrite(data: data)
+            } catch {
+                CodexBarLog.logger(LogCategories.configStore).error("Failed to encode config: \(error)")
+                return
+            }
             let error: (any Error)? = await Task.detached(priority: .utility) {
                 do {
-                    try store.save(snapshot)
+                    try store.saveEncodedData(data)
                     return nil
                 } catch {
                     return error

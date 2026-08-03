@@ -18,12 +18,13 @@ public enum SyntheticProviderDescriptor {
                 toggleTitle: "Show Synthetic usage",
                 cliName: "synthetic",
                 defaultEnabled: false,
+                widgetSelectable: false,
                 isPrimaryProvider: false,
                 usesAccountFallback: false,
                 dashboardURL: nil,
                 statusPageURL: nil),
             branding: ProviderBranding(
-                iconStyle: .synthetic,
+                iconStyle: .init(provider: .synthetic),
                 iconResourceName: "ProviderIcon-synthetic",
                 color: ProviderColor(red: 20 / 255, green: 20 / 255, blue: 20 / 255),
                 confettiPalette: [
@@ -34,16 +35,34 @@ public enum SyntheticProviderDescriptor {
             tokenCost: ProviderTokenCostConfig(
                 supportsTokenCost: false,
                 noDataMessage: { "Synthetic cost summary is not supported." }),
-            fetchPlan: .apiToken(
-                strategyID: "synthetic.api",
-                resolveToken: { ProviderTokenResolver.syntheticToken(environment: $0) },
-                missingCredentialsError: { SyntheticSettingsError.missingToken },
-                loadUsage: { apiKey, _ in
-                    try await SyntheticUsageFetcher.fetchUsage(apiKey: apiKey).toUsageSnapshot()
-                }),
+            fetchPlan: self.fetchPlan(),
             cli: ProviderCLIConfig(
                 name: "synthetic",
                 aliases: ["synthetic.new"],
                 versionDetector: nil))
+    }
+
+    private static func fetchPlan() -> ProviderFetchPlan {
+        #if canImport(JavaScriptCore)
+        .scriptPrototypeAPI(
+            configuration: .init(
+                provider: .synthetic,
+                plugin: "synthetic",
+                secretKey: SyntheticSettingsReader.apiKeyKey,
+                strategyID: "synthetic.api"),
+            resolveToken: { ProviderTokenResolver.syntheticToken(environment: $0) },
+            missingCredentialsError: { SyntheticSettingsError.missingToken },
+            loadUsage: { apiKey, _ in
+                try await SyntheticUsageFetcher.fetchUsage(apiKey: apiKey).toUsageSnapshot()
+            })
+        #else
+        .apiToken(
+            strategyID: "synthetic.api",
+            resolveToken: { ProviderTokenResolver.syntheticToken(environment: $0) },
+            missingCredentialsError: { SyntheticSettingsError.missingToken },
+            loadUsage: { apiKey, _ in
+                try await SyntheticUsageFetcher.fetchUsage(apiKey: apiKey).toUsageSnapshot()
+            })
+        #endif
     }
 }

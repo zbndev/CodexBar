@@ -6,6 +6,14 @@ import WidgetKit
 
 extension UsageStore {
     func persistWidgetSnapshot(reason: String) {
+        #if DEBUG
+        // Unsigned test processes must not cross into the real app-group container. Snapshot tests
+        // opt in with an in-memory save override or an injected file URL.
+        guard !SettingsStore.isRunningTests ||
+            self._test_widgetSnapshotSaveOverride != nil ||
+            self.widgetSnapshotURL != nil
+        else { return }
+        #endif
         // A fresh process has token-cost data before a user-authorized Claude OAuth refresh can run.
         // Keep the last queued snapshot in memory so back-to-back writes cannot race the on-disk cache.
         let previousSnapshot = self.lastQueuedWidgetSnapshot ?? {
@@ -13,10 +21,16 @@ extension UsageStore {
             // Snapshot-save overrides must stay isolated from a developer's real app-group data.
             guard self._test_widgetSnapshotSaveOverride == nil else { return nil }
             #endif
+            if let widgetSnapshotURL = self.widgetSnapshotURL {
+                return WidgetSnapshotStore.load(from: widgetSnapshotURL)
+            }
             return WidgetSnapshotStore.load()
         }()
         let snapshot = self.makeWidgetSnapshot(previousSnapshot: previousSnapshot)
         self.lastQueuedWidgetSnapshot = snapshot
+        NotificationCenter.default.post(
+            name: .codexbarUsageSnapshotsDidChange,
+            object: UsageSnapshotsDidChangeEvent(snapshots: self.cloudSyncAccountSnapshots()))
         let previousTask = self.widgetSnapshotPersistTask
         self.widgetSnapshotPersistTask = Task { @MainActor in
             _ = await previousTask?.result
@@ -26,13 +40,114 @@ extension UsageStore {
                 return
             }
 
+            let widgetSnapshotURL = self.widgetSnapshotURL
             await Task.detached(priority: .utility) {
-                WidgetSnapshotStore.save(snapshot)
+                if let widgetSnapshotURL {
+                    WidgetSnapshotStore.save(snapshot, to: widgetSnapshotURL)
+                } else {
+                    WidgetSnapshotStore.save(snapshot)
+                }
             }.value
             #if canImport(WidgetKit)
             WidgetCenter.shared.reloadAllTimelines()
             #endif
         }
+    }
+
+    func cloudSyncAccountSnapshots() -> [AccountSnapshotSyncPayload] {
+        let deviceID = self.settings.iCloudSyncDeviceID
+        var payloads: [String: AccountSnapshotSyncPayload] = [:]
+
+        for (provider, usage) in self.snapshots {
+            let identity = usage.identity?.accountID ?? usage.identity?.accountEmail
+            let label = usage.identity?.accountEmail
+                ?? usage.identity?.accountOrganization
+                ?? ProviderDescriptorRegistry.descriptor(for: provider).metadata.displayName
+            let payload = AccountSnapshotSyncPayload(
+                provider: provider,
+                deviceID: deviceID,
+                accountIdentity: identity,
+                displayLabel: label,
+                usage: usage)
+            payloads[payload.recordName] = payload
+        }
+
+        for (provider, accountSnapshots) in self.accountSnapshots {
+            for accountSnapshot in accountSnapshots {
+                guard let usage = accountSnapshot.snapshot else { continue }
+                let identity = usage.identity?.accountID
+                    ?? usage.identity?.accountEmail
+                    ?? accountSnapshot.account.externalIdentifier
+                    ?? accountSnapshot.account.id.uuidString
+                let payload = AccountSnapshotSyncPayload(
+                    provider: provider,
+                    deviceID: deviceID,
+                    accountIdentity: identity,
+                    displayLabel: accountSnapshot.account.displayName,
+                    usage: usage)
+                payloads[payload.recordName] = payload
+            }
+        }
+
+        for accountSnapshot in self.claudeSwapAccountSnapshots {
+            guard let usage = accountSnapshot.snapshot else { continue }
+            let identity = usage.identity?.accountID
+                ?? usage.identity?.accountEmail
+                ?? "\(accountSnapshot.id.source):\(accountSnapshot.id.opaqueID)"
+            let payload = AccountSnapshotSyncPayload(
+                provider: accountSnapshot.provider,
+                deviceID: deviceID,
+                accountIdentity: identity,
+                displayLabel: accountSnapshot.displayLabel,
+                usage: usage)
+            payloads[payload.recordName] = payload
+        }
+
+        return payloads.values.sorted { $0.recordName < $1.recordName }
+    }
+
+    func cloudSyncLocalAccountKeys(for provider: UsageProvider) -> Set<String> {
+        var identities: Set<String> = []
+        func insert(_ identity: String?) {
+            guard let identity else { return }
+            identities.insert(AccountSnapshotSyncPayload.accountKey(for: identity))
+        }
+
+        if let usage = self.snapshots[provider] {
+            insert(usage.identity?.accountID ?? usage.identity?.accountEmail)
+        }
+        for accountSnapshot in self.accountSnapshots[provider] ?? [] {
+            insert(accountSnapshot.snapshot?.identity?.accountID)
+            insert(accountSnapshot.snapshot?.identity?.accountEmail)
+            insert(accountSnapshot.account.externalIdentifier)
+            insert(accountSnapshot.account.id.uuidString)
+        }
+        for account in self.settings.tokenAccounts(for: provider) {
+            insert(account.externalIdentifier)
+            insert(account.id.uuidString)
+        }
+        if provider == .claude {
+            for accountSnapshot in self.claudeSwapAccountSnapshots {
+                insert(accountSnapshot.snapshot?.identity?.accountID)
+                insert(accountSnapshot.snapshot?.identity?.accountEmail)
+                insert("\(accountSnapshot.id.source):\(accountSnapshot.id.opaqueID)")
+            }
+        }
+        if provider == .codex,
+           let projection = self.settings.codexVisibleAccountProjectionForMenuDisplay
+        {
+            for account in projection.visibleAccounts {
+                insert(account.workspaceAccountID)
+                insert(account.email)
+                insert(account.id)
+                insert(account.storedAccountID?.uuidString)
+            }
+        }
+        if identities.isEmpty {
+            let fallback = self.accountInfo(for: provider)
+            insert(fallback.email)
+        }
+        return identities
     }
 
     private func makeWidgetSnapshot(previousSnapshot: WidgetSnapshot?) -> WidgetSnapshot {

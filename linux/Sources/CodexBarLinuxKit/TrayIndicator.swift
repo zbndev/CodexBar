@@ -1,18 +1,18 @@
-import CAyatanaAppIndicator
 import Foundation
 
 /// A StatusNotifierItem tray entry.
 ///
-/// Uses the GLib build of libayatana-appindicator, whose menu is a `GMenu`
-/// and whose actions are a `GSimpleActionGroup` — both GIO rather than
-/// widgets, which is what lets it coexist with GTK4 in one process.
+/// Both halves of the protocol are served in-process:
+/// `StatusNotifierItemServer` publishes the item, `TrayMenuServer` publishes
+/// `com.canonical.dbusmenu` on the same object path. Neither needs
+/// `libayatana-appindicator-glib`, which was GPL-3 and unavailable on every
+/// distribution this project packages for except Arch.
 ///
 /// `@unchecked Sendable` for the same reason as `GtkWindow`: the instance is
-/// confined to the GTK main-loop thread. The dbusmenu server calls back into
-/// it from that same thread, through a `@Sendable` closure.
+/// confined to the GTK main-loop thread, and both servers call back into it
+/// from that same thread.
 public final class TrayIndicator: @unchecked Sendable {
-    private let indicator: OpaquePointer
-    private let actions: OpaquePointer
+    private var itemServer: StatusNotifierItemServer?
     private var menuServer: TrayMenuServer?
 
     public var onShow: (@Sendable () -> Void)?
@@ -30,11 +30,11 @@ public final class TrayIndicator: @unchecked Sendable {
     ]
 
     /// - Parameter connection: the session bus, from `GtkApplication.dbusConnection`.
-    ///   Passing nil skips the dbusmenu registration — the icon still appears,
-    ///   but its menu is invisible to non-GNOME hosts.
+    ///   Passing nil skips registration entirely — the app runs without a tray
+    ///   icon, which is better than refusing to start.
     /// - Parameter iconThemePath: a directory holding `<iconName>.png`, searched
     ///   ahead of the icon theme. Nil resolves `iconName` against the theme
-    ///   alone, which is what a stock freedesktop name needs.
+    ///   alone, which is what an installed build wants.
     public init(
         id: String,
         iconName: String,
@@ -42,39 +42,36 @@ public final class TrayIndicator: @unchecked Sendable {
         connection: OpaquePointer?,
         iconThemePath: String? = nil)
     {
-        let created = iconThemePath.map {
-            app_indicator_new_with_path(id, iconName, APP_INDICATOR_CATEGORY_APPLICATION_STATUS, $0)
-        } ?? app_indicator_new(id, iconName, APP_INDICATOR_CATEGORY_APPLICATION_STATUS)
-        guard let indicator = created else {
-            fatalError("app_indicator_new returned NULL")
-        }
-        self.indicator = OpaquePointer(indicator)
+        guard let connection else { return }
+        // The path libayatana used, kept so nothing else has to move.
+        let path = "/org/ayatana/appindicator/\(id)"
 
-        guard let group = g_simple_action_group_new() else {
-            fatalError("g_simple_action_group_new returned NULL")
-        }
-        self.actions = OpaquePointer(group)
+        let menu = TrayMenuServer(
+            connection: connection,
+            objectPath: path,
+            items: Self.menuItems,
+            activate: { [weak self] action in self?.activate(action) })
+        menu.register()
+        self.menuServer = menu
 
-        app_indicator_set_title(indicator, title)
-        app_indicator_set_status(indicator, APP_INDICATOR_STATUS_ACTIVE)
-
-        self.installActions()
-        self.installMenu()
-
-        if let connection {
-            // The path libayatana exports and points its `Menu` property at.
-            let server = TrayMenuServer(
-                connection: connection,
-                objectPath: "/org/ayatana/appindicator/\(id)",
-                items: Self.menuItems,
-                activate: { [weak self] action in self?.activate(action) })
-            server.register()
-            self.menuServer = server
-        }
+        let item = StatusNotifierItemServer(
+            connection: connection,
+            objectPath: path,
+            state: StatusNotifierItemState(
+                id: id,
+                title: title,
+                iconName: iconName,
+                iconThemePath: iconThemePath ?? "",
+                menuPath: path))
+        // A left click opens the popup, matching what the GAction did before.
+        item.onActivate = { [weak self] in self?.activate("show") }
+        item.onSecondaryActivate = { [weak self] in self?.activate("show") }
+        item.register()
+        self.itemServer = item
     }
 
-    /// Runs the same closure a `GAction` activation would, so a dbusmenu click
-    /// and an `org.gtk.Actions` activation cannot diverge.
+    /// One place where a menu click and a direct activation converge, so they
+    /// cannot diverge.
     private func activate(_ action: String) {
         switch action {
         case "show": self.onShow?()
@@ -85,64 +82,12 @@ public final class TrayIndicator: @unchecked Sendable {
         }
     }
 
-    private func installActions() {
-        for item in Self.menuItems {
-            guard let name = item.actionName else { continue }
-            self.addAction(named: name) { [weak self] in self?.activate(name) }
-        }
-        app_indicator_set_actions(
-            UnsafeMutablePointer<AppIndicator>(self.indicator),
-            UnsafeMutablePointer<GSimpleActionGroup>(self.actions))
-    }
-
-    fileprivate final class ActionBox {
-        let work: () -> Void
-        init(_ work: @escaping () -> Void) { self.work = work }
-    }
-
-    private func addAction(named name: String, work: @escaping () -> Void) {
-        guard let action = g_simple_action_new(name, nil) else {
-            fatalError("g_simple_action_new returned NULL for \(name)")
-        }
-        let box = Unmanaged.passRetained(ActionBox(work)).toOpaque()
-        g_signal_connect_data(
-            gpointer(action),
-            "activate",
-            unsafeBitCast(Self.activateThunk, to: GCallback.self),
-            box,
-            { data, _ in
-                guard let data else { return }
-                Unmanaged<ActionBox>.fromOpaque(data).release()
-            },
-            GConnectFlags(rawValue: 0))
-        // GActionMap and GAction are GInterfaces with no public struct, so Swift
-        // imports both as bare OpaquePointer — no cast needed.
-        g_action_map_add_action(self.actions, action)
-    }
-
-    private static let activateThunk: @convention(c) (
-        UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> Void = { _, _, data in
-            guard let data else { return }
-            Unmanaged<ActionBox>.fromOpaque(data).takeUnretainedValue().work()
-        }
-
-    private func installMenu() {
-        guard let menu = g_menu_new() else {
-            fatalError("g_menu_new returned NULL")
-        }
-        for item in Self.menuItems {
-            guard let action = item.actionName else { continue }
-            g_menu_append(menu, item.label, action)
-        }
-        app_indicator_set_menu(UnsafeMutablePointer<AppIndicator>(self.indicator), menu)
-    }
-
     /// Text shown next to the tray icon. Empty string hides it.
     public func setLabel(_ text: String) {
-        app_indicator_set_label(UnsafeMutablePointer<AppIndicator>(self.indicator), text, "")
+        self.itemServer?.setLabel(text)
     }
 
     public func setIcon(named name: String) {
-        app_indicator_set_icon(UnsafeMutablePointer<AppIndicator>(self.indicator), name, "")
+        self.itemServer?.setIcon(named: name)
     }
 }

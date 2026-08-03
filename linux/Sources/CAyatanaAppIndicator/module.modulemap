@@ -1,4 +1,0 @@
-module CAyatanaAppIndicator [system] {
-    header "shim.h"
-    export *
-}

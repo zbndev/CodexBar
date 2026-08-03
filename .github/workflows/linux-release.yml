@@ -37,8 +37,23 @@ jobs:
     # See linux/packaging/NOTES.md.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    defaults:
+      run:
+        # Everything runs inside the checkout, which is deliberately not the
+        # default location — see the checkout step.
+        working-directory: CodexBar
     steps:
+      # Checked out as "CodexBar", not the repository name. linux/Package.swift
+      # declares `.package(path: "..")` and its targets ask for
+      # `package: "CodexBar"`, and SwiftPM takes a path dependency's identity
+      # from the directory name rather than the manifest's `name:`. Checking
+      # out as the repository name (CodexBar-Linux) fails resolution with
+      # "unknown package 'CodexBar' in dependencies of target
+      # 'CodexBarLinuxKit'". Nothing else builds linux/ in CI, so this only
+      # ever surfaces here.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: CodexBar
 
       - name: Validate the version
         shell: bash

@@ -12,7 +12,7 @@ import Testing
     let events = [
         dispatcher.event(for: .quotaLow(windowID: "primary", threshold: 20, remainingPercent: 19), provider: "claude"),
         dispatcher.event(for: .quotaReached(windowID: "primary"), provider: "claude"),
-        dispatcher.event(for: .quotaReset(windowID: "primary"), provider: "claude"),
+        dispatcher.event(for: .quotaReset(windowID: "primary", remainingPercent: 100), provider: "claude"),
         dispatcher.event(for: .refreshFailed, provider: "claude"),
         dispatcher.event(for: .providerUnavailable, provider: "claude"),
         dispatcher.event(for: .providerRecovered, provider: "claude"),
@@ -27,6 +27,17 @@ import Testing
         .providerUnavailable,
         .providerRecovered,
     ])
+}
+
+@Test func `a quota reset hook reports the observed usage rather than an empty window`() {
+    // Given
+    let dispatcher = LinuxHookDispatcher(hooksConfig: { HooksConfig() })
+
+    // When
+    let event = dispatcher.event(for: .quotaReset(windowID: "primary", remainingPercent: 29), provider: "claude")
+
+    // Then
+    #expect(event.usagePercent == 0.71)
 }
 
 @Test func `test hook returns only per rule success summaries`() async {

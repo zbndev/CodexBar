@@ -20,22 +20,15 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
 
         /// Whether two observations describe the same reset cycle.
         ///
-        /// Keying on the exact `resetAt` meant every refresh looked like a new
-        /// cycle for any provider that reports a *relative* TTL: `resetsAt` is
-        /// recomputed as `now + ttl` per fetch, so it lands a fraction of a
-        /// second away each time. Measured in
-        /// `~/.config/codexbar/history/opencodego.json`: 34 consecutive samples,
-        /// 34 distinct dates. Claude instead re-rounds the same cycle and
-        /// oscillates by exactly ±60s. Both re-armed the warning on every
-        /// refresh, so the notification repeated at the refresh interval.
-        ///
-        /// The tolerance is upstream's, from
-        /// `PredictivePaceWarningResetWindow.belongsToSameCycle`: half the
-        /// window, floored at five minutes.
+        /// Keying on the exact `resetAt` re-armed the warning on every refresh,
+        /// so the notification repeated at the refresh interval — see
+        /// `QuotaResetCycle` for the drift this tolerates and why.
         func belongsToSameCycle(as other: Self) -> Bool {
             guard self.windowMinutes == other.windowMinutes else { return false }
-            let tolerance = self.windowMinutes.map { max(TimeInterval($0 * 60) / 2, 300) } ?? 300
-            return abs(self.resetAt.timeIntervalSince(other.resetAt)) < tolerance
+            return QuotaResetCycle.belongsToSameCycle(
+                self.resetAt,
+                other.resetAt,
+                windowMinutes: self.windowMinutes)
         }
     }
 
@@ -81,11 +74,14 @@ public final class LinuxNotificationCoordinator: @unchecked Sendable {
                     summary: "Quota depleted",
                     body: self.quotaBody(provider: provider, windowID: windowID, remainingPercent: 0),
                     settings: settings)
-            case let .quotaReset(windowID):
+            case let .quotaReset(windowID, remainingPercent):
                 guard settings.sessionQuotaNotificationsEnabled else { continue }
                 await self.send(
                     summary: "Quota restored",
-                    body: self.quotaBody(provider: provider, windowID: windowID, remainingPercent: 100),
+                    body: self.quotaBody(
+                        provider: provider,
+                        windowID: windowID,
+                        remainingPercent: remainingPercent),
                     settings: settings)
             case .refreshFailed, .providerUnavailable, .providerRecovered:
                 continue

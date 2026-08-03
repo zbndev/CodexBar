@@ -61,6 +61,8 @@ private enum TransitionFixtureError: Error {
 @Test func `changed reset boundary with increased remaining emits reset`() {
     // Given
     let engine = UsageTransitionEngine(lowQuotaThresholds: [20])
+    // A whole window later, so the boundary is unambiguously a new cycle rather
+    // than the same one re-rounded.
     _ = engine.transitions(for: transitionRecord(
         remainingPercent: 0,
         resetsAt: Date(timeIntervalSince1970: 100)))
@@ -68,10 +70,51 @@ private enum TransitionFixtureError: Error {
     // When
     let transitions = engine.transitions(for: transitionRecord(
         remainingPercent: 80,
-        resetsAt: Date(timeIntervalSince1970: 200)))
+        resetsAt: Date(timeIntervalSince1970: 100 + 300 * 60)))
 
     // Then
-    #expect(transitions == [.quotaReset(windowID: "primary")])
+    #expect(transitions == [.quotaReset(windowID: "primary", remainingPercent: 80)])
+}
+
+@Test func `a quota reset carries the observed remaining rather than a full window`() {
+    // Given
+    // A 5h lane observed rolling over at 08-04 00:28 held 29% remaining, not
+    // 100%: the reset is detected on the first refresh after the boundary, by
+    // which point the new cycle has already been drawn down.
+    let engine = UsageTransitionEngine(lowQuotaThresholds: [20])
+    _ = engine.transitions(for: transitionRecord(
+        remainingPercent: 8,
+        resetsAt: Date(timeIntervalSince1970: 807_411_000)))
+
+    // When
+    let transitions = engine.transitions(for: transitionRecord(
+        remainingPercent: 29,
+        resetsAt: Date(timeIntervalSince1970: 807_488_400)))
+
+    // Then
+    #expect(transitions == [.quotaReset(windowID: "primary", remainingPercent: 29)])
+}
+
+@Test func `a minute-rounded reset boundary does not emit a quota reset`() {
+    // Given
+    // Measured from `~/.config/codexbar/history/claude.json`: the weekly lane
+    // re-rounds the same cycle and oscillates between two boundaries exactly
+    // 60s apart, while a rolling window's remaining ticks up as old usage falls
+    // off its tail. Together those read as a reset on every other refresh.
+    let engine = UsageTransitionEngine(lowQuotaThresholds: [20])
+    _ = engine.transitions(for: transitionRecord(
+        remainingPercent: 43,
+        resetsAt: Date(timeIntervalSince1970: 807_785_940),
+        windowMinutes: 7 * 24 * 60))
+
+    // When
+    let transitions = engine.transitions(for: transitionRecord(
+        remainingPercent: 44,
+        resetsAt: Date(timeIntervalSince1970: 807_786_000),
+        windowMinutes: 7 * 24 * 60))
+
+    // Then
+    #expect(transitions.isEmpty)
 }
 
 @Test func `failed refresh emits failure without changing quota baseline`() {
@@ -119,11 +162,12 @@ private enum TransitionFixtureError: Error {
 private func transitionRecord(
     remainingPercent: Double,
     resetsAt: Date? = nil,
-    windowID: String = "primary") -> ProviderRefreshRecord
+    windowID: String = "primary",
+    windowMinutes: Int = 300) -> ProviderRefreshRecord
 {
     let window = RateWindow(
         usedPercent: 100 - remainingPercent,
-        windowMinutes: 300,
+        windowMinutes: windowMinutes,
         resetsAt: resetsAt,
         resetDescription: nil)
     let snapshot = UsageSnapshot(

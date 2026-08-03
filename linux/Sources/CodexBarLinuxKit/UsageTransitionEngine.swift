@@ -5,7 +5,7 @@ import Foundation
 public enum UsageTransition: Equatable, Sendable {
     case quotaLow(windowID: String, threshold: Int, remainingPercent: Double)
     case quotaReached(windowID: String)
-    case quotaReset(windowID: String)
+    case quotaReset(windowID: String, remainingPercent: Double)
     case refreshFailed
     case providerUnavailable
     case providerRecovered
@@ -23,6 +23,7 @@ public final class UsageTransitionEngine: @unchecked Sendable {
     private struct WindowState {
         let remainingPercent: Double
         let resetBoundary: Date?
+        let windowMinutes: Int?
         let hasReachedQuota: Bool
     }
 
@@ -68,11 +69,12 @@ public final class UsageTransitionEngine: @unchecked Sendable {
             let remainingPercent = window.value.remainingPercent
             let prior = self.windows[key]
             let reset = prior.map {
-                $0.resetBoundary != window.value.resetsAt && remainingPercent > $0.remainingPercent
+                Self.enteredNewCycle(previous: $0, current: window.value)
+                    && remainingPercent > $0.remainingPercent
             } ?? false
 
             if reset {
-                transitions.append(.quotaReset(windowID: window.id))
+                transitions.append(.quotaReset(windowID: window.id, remainingPercent: remainingPercent))
             } else if let prior {
                 for threshold in self.lowQuotaThresholds where
                     prior.remainingPercent > Double(threshold) && remainingPercent <= Double(threshold)
@@ -91,6 +93,7 @@ public final class UsageTransitionEngine: @unchecked Sendable {
             self.windows[key] = WindowState(
                 remainingPercent: remainingPercent,
                 resetBoundary: window.value.resetsAt,
+                windowMinutes: window.value.windowMinutes,
                 hasReachedQuota: hasReachedQuota)
         }
         return transitions
@@ -99,6 +102,21 @@ public final class UsageTransitionEngine: @unchecked Sendable {
     public func retainState(forProviderIDs providerIDs: Set<String>) {
         self.windows = self.windows.filter { providerIDs.contains($0.key.providerID) }
         self.unavailableProviders = self.unavailableProviders.filter(providerIDs.contains)
+    }
+
+    /// A reset boundary that moved only counts as a new cycle when it moved far
+    /// enough to be one — see `QuotaResetCycle`. A boundary appearing or
+    /// disappearing carries no cycle to compare, so plain inequality still
+    /// decides those, and a resized window is a new shape either way.
+    private static func enteredNewCycle(previous: WindowState, current: RateWindow) -> Bool {
+        guard let previousBoundary = previous.resetBoundary, let currentBoundary = current.resetsAt else {
+            return previous.resetBoundary != current.resetsAt
+        }
+        guard previous.windowMinutes == current.windowMinutes else { return true }
+        return !QuotaResetCycle.belongsToSameCycle(
+            previousBoundary,
+            currentBoundary,
+            windowMinutes: current.windowMinutes)
     }
 
     private func failedTransitions(for record: ProviderRefreshRecord) -> [UsageTransition] {

@@ -112,6 +112,23 @@ private actor NotificationOutcomeSequence {
     #expect(sent[0].body == "Claude / secondary / 19% remaining")
 }
 
+@Test func `a quota restored notification reports the observed remaining`() async {
+    // A reset is detected on the first refresh after the boundary, so the lane
+    // is rarely full by then. The body used to claim 100% unconditionally.
+    let recorder = SentNotificationRecorder()
+    let coordinator = LinuxNotificationCoordinator(sender: RecordingDesktopNotificationSender(recorder: recorder))
+
+    await coordinator.consume(
+        [.quotaReset(windowID: "secondary", remainingPercent: 44)],
+        provider: notificationProvider(),
+        settings: LinuxSettings())
+
+    let sent = await recorder.values()
+    #expect(sent.count == 1)
+    #expect(sent[0].summary == "Quota restored")
+    #expect(sent[0].body == "Claude / secondary / 44% remaining")
+}
+
 @Test func `transition threshold warnings honor task eight transitions and delivery preferences`() async {
     var settings = LinuxSettings()
     settings.quotaWarningSoundEnabled = false

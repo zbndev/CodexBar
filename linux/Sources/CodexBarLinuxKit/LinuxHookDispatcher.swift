@@ -58,10 +58,10 @@ public final class LinuxHookDispatcher: @unchecked Sendable {
             window = windowID
             usagePercent = 1
             status = nil
-        case let .quotaReset(windowID):
+        case let .quotaReset(windowID, remainingPercent):
             type = .quotaReset
             window = windowID
-            usagePercent = 0
+            usagePercent = 1 - (remainingPercent / 100)
             status = nil
         case .refreshFailed:
             type = .refreshFailed
@@ -111,7 +111,7 @@ public final class LinuxHookDispatcher: @unchecked Sendable {
         case .quotaReached:
             transition = .quotaReached(windowID: "primary")
         case .quotaReset:
-            transition = .quotaReset(windowID: "primary")
+            transition = .quotaReset(windowID: "primary", remainingPercent: 100)
         case .refreshFailed:
             transition = .refreshFailed
         case .providerUnavailable:

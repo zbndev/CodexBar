@@ -223,8 +223,7 @@ public enum GeneralPaneCatalog {
     }
 }
 
-/// Build metadata for the About pane. A real version arrives with M6
-/// packaging; until then the commit-distance placeholder is honest.
+/// Build metadata for the About pane and the diagnostics export.
 public enum LinuxAppInfo {
-    public static let version = "0.1.0-dev"
+    public static var version: String { BuildVersion.marketing }
 }

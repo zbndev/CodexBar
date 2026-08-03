@@ -2,6 +2,14 @@ import CodexBarCore
 import CodexBarLinuxKit
 import Foundation
 
+// Ahead of every GTK and D-Bus call: the packaging jobs run this in a
+// container with no display and no session bus, purely to prove the artifact
+// executes and reports the version it claims on its filename.
+if CommandLine.arguments.dropFirst().contains("--version") {
+    print("CodexBar for Linux \(LinuxAppInfo.version)")
+    exit(0)
+}
+
 // Top-level code is main-actor isolated, but the GTK callbacks below are plain
 // `@Sendable` closures invoked by the GTK main loop. These globals are confined
 // to the GTK thread by construction — nothing else ever touches them.

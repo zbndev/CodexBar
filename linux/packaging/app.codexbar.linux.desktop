@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=CodexBar
+GenericName=AI coding usage monitor
+Comment=AI coding usage in your tray
+Exec=codexbar
+Icon=codexbar
+Terminal=false
+Categories=Utility;Monitor;
+Keywords=usage;quota;codex;claude;copilot;
+StartupNotify=false

@@ -7,9 +7,42 @@ dependency list; do not edit these from memory.
 
 - Swift: 6.3.3
 - Development machine: gtk4 4.22.4, webkitgtk-6.0 2.52.5 (Arch)
-- Measured for reference — `ubuntu:24.04`: gtk4 **4.14.5**, webkitgtk-6.0 **2.52.3**
+- `ubuntu:24.04`: gtk4 **4.14.5**, webkitgtk-6.0 **2.52.3**, glibc **2.39**
+- `debian:13`: gtk4 **4.18.6**, webkitgtk-6.0 **2.52.5**, glibc **2.41**
 - Verdict: **the floor is Debian 13 / gtk4 4.18.** Ubuntu 24.04 is not
   supported.
+
+## Verified installs
+
+Built on `ubuntu:24.04`, then installed and run with `--version`:
+
+| Target | Artifact | Result |
+|---|---|---|
+| `debian:13` | `.deb` | runs |
+| `ubuntu:25.10` | `.deb` | runs |
+| `fedora:42` | `.rpm` | runs, after a harmless `libcurl.so.4: no version information available` on stderr — Fedora's libcurl carries no symbol versions, and the call still resolves |
+
+### The build host is not the same question as the floor
+
+Release artifacts must be **built on `ubuntu:24.04`**, which is what
+`linux-release.yml` does. Two measured reasons:
+
+- glibc is forward- but not backward-compatible. A binary built on Arch
+  (glibc 2.44) installs cleanly on Debian 13 and then dies with
+  `libm.so.6: version 'GLIBC_2.43' not found`. Ubuntu 24.04 has the oldest
+  glibc of any candidate host (2.39), so its output runs everywhere newer —
+  verified on Debian 13 (2.41), Ubuntu 25.10 and Fedora 42.
+- Building *in* `debian:13` is not an option: swiftly refuses it outright with
+  `Error: Unsupported Linux platform`. Swift.org publishes toolchains for
+  Ubuntu, Amazon Linux and RHEL, not Debian.
+
+So 24.04 is a build host but not a supported target — the two lists differ on
+purpose.
+
+For the record, the sources **do** compile against gtk4 4.14.5 with no missing
+symbol, so `>= 4.18` is a support policy rather than a technical minimum. It is
+declared anyway: a package that refuses to install where it is not supported is
+better than one that half-works.
 
 ### Why the floor is not Ubuntu 24.04
 

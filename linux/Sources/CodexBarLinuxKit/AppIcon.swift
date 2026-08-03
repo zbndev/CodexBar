@@ -7,7 +7,7 @@ import Foundation
 ///
 /// Read from the repository at runtime rather than copied into this package,
 /// for the reason `ProviderIcons` gives: a sync from upstream then picks up a
-/// redrawn icon with no action here. libayatana wants a *themed name plus a
+/// redrawn icon with no action here. The tray wants a *themed name plus a
 /// search path*, not a file, so the asset is materialised into a private cache
 /// directory under the name the tray asks for. That also keeps the search path
 /// pointed at a directory this app owns, instead of at `docs/`.
@@ -15,36 +15,48 @@ public enum AppIcon {
     /// The name the tray asks its host for, and the basename in `themePath`.
     public static let name = "codexbar"
 
-    /// Repository root: `linux/` sits next to `docs/`.
-    private static var repositoryRoot: URL {
-        URL(fileURLWithPath: #filePath)      // …/linux/Sources/CodexBarLinuxKit/AppIcon.swift
-            .deletingLastPathComponent()      // …/linux/Sources/CodexBarLinuxKit
-            .deletingLastPathComponent()      // …/linux/Sources
-            .deletingLastPathComponent()      // …/linux
-            .deletingLastPathComponent()      // repository root
+    /// What to hand the tray: an icon name, and optionally a directory to
+    /// search ahead of the icon theme.
+    public struct Placement: Equatable, Sendable {
+        public let name: String
+        public let themePath: String?
     }
 
-    /// In preference order. `docs/icon.png` carries an alpha channel and so
-    /// keeps its rounded corners on a light panel; the Icon Composer asset is
-    /// opaque RGB and squares off, which is why it is only the fallback.
-    private static let sourceCandidates = [
+    /// A stock freedesktop name, used only when no asset can be found at all —
+    /// a tray with an unresolvable icon shows nothing.
+    public static let fallbackName = "utilities-system-monitor"
+
+    /// In preference order for a checkout. `docs/icon.png` carries an alpha
+    /// channel and so keeps its rounded corners on a light panel; the Icon
+    /// Composer asset is opaque RGB and squares off.
+    private static let checkoutCandidates = [
         "docs/icon.png",
         "Icon.icon/Assets/codexbar.png",
     ]
 
-    /// Directory to hand libayatana as its icon theme path, or nil when no
-    /// source asset could be found — callers then keep the stock icon name so
-    /// the tray still appears rather than vanishing.
-    public static func themePath(
-        root: URL? = nil,
+    /// An installed package puts the icon in the hicolor theme, so the theme
+    /// resolves `codexbar` on its own and no search path is needed. A checkout
+    /// has no such install, so the asset is materialised into a private cache
+    /// directory under the name the tray asks for — libayatana's old
+    /// requirement, kept because hosts still resolve a themed name plus path.
+    public static func placement(
+        installedRoot: URL? = nil,
+        checkoutRoot: URL? = nil,
         cacheDirectory: URL? = nil,
-        fileManager: FileManager = .default) -> String?
+        fileManager: FileManager = .default) -> Placement
     {
-        let root = root ?? self.repositoryRoot
-        guard let source = self.sourceCandidates
+        let installedRoot = installedRoot ?? LinuxResourceRoot.installed(fileManager: fileManager)
+        if installedRoot != nil {
+            return Placement(name: self.name, themePath: nil)
+        }
+
+        let root = checkoutRoot ?? LinuxResourceRoot.checkout
+        guard let source = self.checkoutCandidates
             .map({ root.appendingPathComponent($0) })
             .first(where: { fileManager.fileExists(atPath: $0.path) })
-        else { return nil }
+        else {
+            return Placement(name: self.fallbackName, themePath: nil)
+        }
 
         let directory = cacheDirectory ?? self.defaultCacheDirectory
         let destination = directory.appendingPathComponent("\(self.name).png")
@@ -59,9 +71,9 @@ public enum AppIcon {
                 try fileManager.copyItem(at: source, to: destination)
             }
         } catch {
-            return nil
+            return Placement(name: self.fallbackName, themePath: nil)
         }
-        return directory.path
+        return Placement(name: self.name, themePath: directory.path)
     }
 
     private static func isStale(destination: URL, source: URL, fileManager: FileManager) -> Bool {

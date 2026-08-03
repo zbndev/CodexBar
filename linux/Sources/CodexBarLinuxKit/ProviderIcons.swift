@@ -1,19 +1,15 @@
 import Foundation
 
-/// Reads provider brand icons from the root package's resources.
+/// Reads provider brand icons from the resource root.
 ///
-/// The files are read at runtime rather than copied into this package, so a
-/// sync from upstream picks up new or changed icons with no action here.
+/// In a checkout that root is the upstream `Sources/CodexBar/Resources`, so a
+/// sync picks up new or changed icons with no action here. An installed
+/// package reads its own copy, made when the package was built.
 public enum ProviderIcons {
-    /// Directory holding `ProviderIcon-*.svg`, resolved relative to this
-    /// package: `linux/` sits next to `Sources/`.
+    /// Directory holding `ProviderIcon-*.svg`: the installed resource root
+    /// when there is one, the repository checkout otherwise.
     public static var resourcesDirectory: URL {
-        URL(fileURLWithPath: #filePath)          // …/linux/Sources/CodexBarLinuxKit/ProviderIcons.swift
-            .deletingLastPathComponent()          // …/linux/Sources/CodexBarLinuxKit
-            .deletingLastPathComponent()          // …/linux/Sources
-            .deletingLastPathComponent()          // …/linux
-            .deletingLastPathComponent()          // repository root
-            .appendingPathComponent("Sources/CodexBar/Resources", isDirectory: true)
+        LinuxResourceRoot.providerResources
     }
 
     private static let cache = IconCache()

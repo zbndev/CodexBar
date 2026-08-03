@@ -13,8 +13,8 @@ public struct LocalizationPayload: Codable, Equatable, Sendable {
 
 /// Loads the upstream `.strings` / `.stringsdict` catalogs for the web UI.
 ///
-/// Like `ProviderIcons`, this reads the repository checkout at runtime; M6
-/// packaging must replace that with bundled resources.
+/// Reads through ``LinuxResourceRoot``, so an installed package uses its own
+/// copy.
 public enum LocalizationCatalog {
     public static let supportedLocales = [
         "ar", "ca", "de", "en", "es", "fa", "fr", "gl", "id", "it", "ja", "ko",
@@ -22,12 +22,7 @@ public enum LocalizationCatalog {
     ]
 
     public static var resourcesDirectory: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // CodexBarLinuxKit
-            .deletingLastPathComponent() // Sources
-            .deletingLastPathComponent() // linux
-            .deletingLastPathComponent() // repository root
-            .appendingPathComponent("Sources/CodexBar/Resources", isDirectory: true)
+        LinuxResourceRoot.providerResources
     }
 
     public static func load(locale requested: String?) -> LocalizationPayload {

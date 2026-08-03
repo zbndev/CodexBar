@@ -18,7 +18,7 @@ private func writeAsset(_ url: URL, bytes: String) throws {
     let cache = tempDirectory()
     try writeAsset(root.appendingPathComponent("docs/icon.png"), bytes: "alpha-icon")
 
-    let path = try #require(AppIcon.themePath(root: root, cacheDirectory: cache))
+    let path = try #require(AppIcon.placement(checkoutRoot: root, cacheDirectory: cache).themePath)
 
     #expect(path == cache.path)
     let materialised = cache.appendingPathComponent("\(AppIcon.name).png")
@@ -32,7 +32,7 @@ private func writeAsset(_ url: URL, bytes: String) throws {
     try writeAsset(root.appendingPathComponent("docs/icon.png"), bytes: "alpha-icon")
     try writeAsset(root.appendingPathComponent("Icon.icon/Assets/codexbar.png"), bytes: "opaque-icon")
 
-    _ = AppIcon.themePath(root: root, cacheDirectory: cache)
+    _ = AppIcon.placement(checkoutRoot: root, cacheDirectory: cache).themePath
 
     let materialised = cache.appendingPathComponent("\(AppIcon.name).png")
     #expect(try String(contentsOf: materialised, encoding: .utf8) == "alpha-icon")
@@ -43,7 +43,7 @@ private func writeAsset(_ url: URL, bytes: String) throws {
     let cache = tempDirectory()
     try writeAsset(root.appendingPathComponent("Icon.icon/Assets/codexbar.png"), bytes: "opaque-icon")
 
-    _ = AppIcon.themePath(root: root, cacheDirectory: cache)
+    _ = AppIcon.placement(checkoutRoot: root, cacheDirectory: cache).themePath
 
     let materialised = cache.appendingPathComponent("\(AppIcon.name).png")
     #expect(try String(contentsOf: materialised, encoding: .utf8) == "opaque-icon")
@@ -53,7 +53,7 @@ private func writeAsset(_ url: URL, bytes: String) throws {
     let root = tempDirectory()
     let cache = tempDirectory()
 
-    #expect(AppIcon.themePath(root: root, cacheDirectory: cache) == nil)
+    #expect(AppIcon.placement(checkoutRoot: root, cacheDirectory: cache).themePath == nil)
     #expect(!FileManager.default.fileExists(atPath: cache.appendingPathComponent("\(AppIcon.name).png").path))
 }
 
@@ -62,20 +62,39 @@ private func writeAsset(_ url: URL, bytes: String) throws {
     let cache = tempDirectory()
     let source = root.appendingPathComponent("docs/icon.png")
     try writeAsset(source, bytes: "first-icon")
-    _ = AppIcon.themePath(root: root, cacheDirectory: cache)
+    _ = AppIcon.placement(checkoutRoot: root, cacheDirectory: cache).themePath
 
     try writeAsset(source, bytes: "redrawn-icon-with-a-different-length")
-    _ = AppIcon.themePath(root: root, cacheDirectory: cache)
+    _ = AppIcon.placement(checkoutRoot: root, cacheDirectory: cache).themePath
 
     let materialised = cache.appendingPathComponent("\(AppIcon.name).png")
     #expect(try String(contentsOf: materialised, encoding: .utf8) == "redrawn-icon-with-a-different-length")
 }
 
+@Test func `an installed layout uses the icon theme instead of a search path`() throws {
+    let installed = tempDirectory()
+    try FileManager.default.createDirectory(at: installed, withIntermediateDirectories: true)
+
+    let placement = AppIcon.placement(installedRoot: installed, cacheDirectory: tempDirectory())
+
+    #expect(placement.name == AppIcon.name)
+    #expect(placement.themePath == nil)
+}
+
+@Test func `no asset anywhere falls back to a stock name`() {
+    let placement = AppIcon.placement(
+        checkoutRoot: tempDirectory(),
+        cacheDirectory: tempDirectory())
+
+    #expect(placement.name == AppIcon.fallbackName)
+    #expect(placement.themePath == nil)
+}
+
 @Test func `the repository ships an asset the tray can actually use`() throws {
-    // Guards the paths in `sourceCandidates` against an upstream move: they are
+    // Guards the paths in `checkoutCandidates` against an upstream move: they are
     // strings, so nothing else would notice until the tray fell back to stock.
     let cache = tempDirectory()
-    let path = try #require(AppIcon.themePath(cacheDirectory: cache))
+    let path = try #require(AppIcon.placement(cacheDirectory: cache).themePath)
     let materialised = URL(fileURLWithPath: path).appendingPathComponent("\(AppIcon.name).png")
     let data = try Data(contentsOf: materialised)
     #expect(data.count > 1024)

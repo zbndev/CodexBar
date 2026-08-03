@@ -289,15 +289,15 @@ app.onActivate = {
     // it for the same reason; the tray's own window never did.
     created.setHideOnClose(true)
 
-    // The app's own icon when its asset is reachable, the stock gauge only as a
+    // The app's own icon when its asset is reachable, a stock name only as a
     // fallback — a tray with no resolvable icon shows nothing at all.
-    let trayIconThemePath = AppIcon.themePath()
+    let iconPlacement = AppIcon.placement()
     let madeTray = TrayIndicator(
         id: "codexbar",
-        iconName: trayIconThemePath == nil ? "utilities-system-monitor" : AppIcon.name,
+        iconName: iconPlacement.name,
         title: "CodexBar",
         connection: app.dbusConnection,
-        iconThemePath: trayIconThemePath)
+        iconThemePath: iconPlacement.themePath)
     madeTray.onShow = {
         MainLoopDispatch.onMainLoop {
             if created.isVisible {

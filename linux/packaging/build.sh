@@ -15,7 +15,14 @@ output="$1"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 package="$(dirname "$here")"
 
-swift build --package-path "$package" -c release --static-swift-stdlib
+# CODEXBAR_SKIP_BUILD=1 stages products that already exist instead of building.
+# makepkg runs package() under fakeroot, where swift-package segfaults, so the
+# PKGBUILD builds in build() and only stages here. The existence checks below
+# then carry the weight: a missing product fails loudly rather than silently
+# packaging nothing.
+if [[ "${CODEXBAR_SKIP_BUILD:-0}" != "1" ]]; then
+    swift build --package-path "$package" -c release --static-swift-stdlib
+fi
 
 binary="$package/.build/release/CodexBarLinux"
 # SwiftPM on Linux emits a plain directory, not a .bundle; Bundle.module

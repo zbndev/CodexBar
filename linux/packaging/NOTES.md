@@ -219,7 +219,28 @@ regress the tray:
 None of these can be checked headlessly, and no packaged build has been run on
 a desktop yet:
 
-- [ ] `makepkg -si` from the released `PKGBUILD` builds and installs.
+Done: `makepkg` from the released tag archive builds a
+`codexbar-linux-0.1.0-1-x86_64.pkg.tar.zst` whose `usr/bin/codexbar --version`
+reports `0.1.0`, with the same layout as the `.deb`. Two traps had to be
+cleared first, both worth knowing before editing the recipe:
+
+- GitHub names the directory inside a tag archive after the **canonical**
+  repository, so it unpacks as `CodexBar-Linux-linux-v<pkgver>`. A redirect
+  from an older repository name serves the download but does not rename that
+  directory. `prepare()` then renames it to `CodexBar`, because SwiftPM takes
+  a path dependency's identity from the directory name and
+  `linux/Package.swift` asks for `package: "CodexBar"`. A symlink does not
+  work — SwiftPM resolves it back.
+- `package()` runs under fakeroot, where `swift-package` **segfaults**. So
+  `build.sh` takes `CODEXBAR_SKIP_BUILD=1` and the recipe builds in `build()`,
+  staging only in `package()`.
+
+`makepkg` warns `Package contains reference to $srcdir` for the binary. That is
+`options=('!strip')` leaving build paths in the debug info; stripping a
+statically linked Swift binary is the riskier of the two, so the warning
+stands.
+
+- [ ] `makepkg -si` installs system-wide and the installed binary runs.
 - [ ] The AppImage's popup visibly renders. The process model is verified (see
       above), the pixels are not.
 - [ ] Settings opens and provider brand icons appear in the provider panes —

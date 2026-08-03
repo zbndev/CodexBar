@@ -6,11 +6,18 @@
 # The Swift toolchain comes from the AUR (`swift-bin`); Arch has no official
 # Swift package. It is only needed to build.
 pkgname=codexbar-linux
-pkgver=0.0.0
+pkgver=0.1.0
 pkgrel=1
 pkgdesc="AI coding usage in your tray (Linux GUI for CodexBar)"
 arch=('x86_64')
-url="https://github.com/zbndev/CodexBar"
+# The repository name, kept in a variable because GitHub names the top-level
+# directory inside a tag archive after the *canonical* repository — this
+# tarball unpacks as "CodexBar-Linux-linux-v<pkgver>". A redirect from an
+# older repository name still serves the download but does not rename that
+# directory, so getting this wrong fails in build(), after a successful fetch.
+_repo=CodexBar-Linux
+_srcdir="$_repo-linux-v$pkgver"
+url="https://github.com/zbndev/$_repo"
 license=('MIT')
 depends=('gtk4' 'webkitgtk-6.0' 'glib2' 'curl' 'sqlite')
 makedepends=('swift-bin')
@@ -18,8 +25,24 @@ options=('!strip' '!debug')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/linux-v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
+prepare() {
+    # SwiftPM takes a path dependency's identity from the directory name, and
+    # linux/Package.swift asks for `package: "CodexBar"` via `.package(path:
+    # "..")`. Building in the extracted directory therefore fails with
+    # "unknown package 'CodexBar'". Renaming is the whole fix; a symlink is
+    # not, because SwiftPM resolves it back to the real name.
+    rm -rf "$srcdir/CodexBar"
+    mv "$srcdir/$_srcdir" "$srcdir/CodexBar"
+
+    # A tag archive carries the committed placeholder, so without this the
+    # About pane and `codexbar --version` report 0.0.0-dev from a package
+    # named 0.1.0. The release workflow does the same before building.
+    cd "$srcdir/CodexBar"
+    linux/packaging/set-version.sh "$pkgver"
+}
+
 build() {
-    cd "$srcdir/CodexBar-linux-v$pkgver"
+    cd "$srcdir/CodexBar"
     # Statically linked Swift runtime, matching the release binaries: Arch has
     # no Swift runtime package to depend on.
     #
@@ -29,9 +52,10 @@ build() {
 }
 
 package() {
-    cd "$srcdir/CodexBar-linux-v$pkgver"
-    # stage.sh calls swift build again; after build() that is an incremental
-    # no-op, and sharing one staging script keeps the package layout identical
-    # to the .deb and .rpm rather than a second description that can drift.
-    linux/packaging/stage.sh "$pkgdir"
+    cd "$srcdir/CodexBar"
+    # Sharing one staging script keeps the package layout identical to the
+    # .deb and .rpm rather than a second description that can drift. The build
+    # is skipped: package() runs under fakeroot, and swift-package segfaults
+    # there, so build() above has already produced everything stage.sh copies.
+    CODEXBAR_SKIP_BUILD=1 linux/packaging/stage.sh "$pkgdir"
 }

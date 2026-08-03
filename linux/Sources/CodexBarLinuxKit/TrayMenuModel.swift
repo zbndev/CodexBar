@@ -153,7 +153,7 @@ public enum TrayMenuLayout {
         if let error {
             let message = String(cString: error.pointee.message)
             FileHandle.standardError.write(Data(
-                "codexbar: dbusmenu variant parse failed (\(typeString)): \(message)\n".utf8))
+                "codexbar: tray variant parse failed (\(typeString)): \(message)\n".utf8))
             g_error_free(error)
             return nil
         }

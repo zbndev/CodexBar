@@ -59,18 +59,22 @@ public final class LinuxCostStore: @unchecked Sendable {
     }
 
     public func refresh(providerID: String, config: ProviderConfig, forceRefresh: Bool = false) async {
-        guard config.enabled == true, config.id.rawValue == providerID else {
+        // Cost tracking reads first-party local telemetry, so a plugin instance
+        // id that maps to no `UsageProvider` is unavailable by construction.
+        guard config.enabled == true, config.id.rawValue == providerID,
+              let provider = config.id.firstPartyProvider
+        else {
             self.lock.withLock { self.states[providerID] = .unavailable }
             return
         }
-        guard Self.supports(config.id) else {
+        guard Self.supports(provider) else {
             self.lock.withLock { self.states[providerID] = .unavailable }
             return
         }
         let request = self.startRequest(providerID: providerID, config: config)
         do {
             let snapshot = try await self.load(CostUsageLoadRequest(
-                provider: config.id,
+                provider: provider,
                 config: config,
                 forceRefresh: forceRefresh,
                 historyDays: 30))

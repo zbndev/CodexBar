@@ -95,6 +95,6 @@ public struct UsageRefresher: Sendable {
         for provider: UsageProvider,
         config: CodexBarConfig?) -> ProviderSourceMode
     {
-        config?.providers.first { $0.id == provider }?.source ?? .auto
+        config?.providerConfig(for: provider.instanceID)?.source ?? .auto
     }
 }

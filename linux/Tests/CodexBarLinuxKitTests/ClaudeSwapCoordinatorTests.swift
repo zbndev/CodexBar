@@ -29,11 +29,11 @@ private func claudeSwapFixtureAccount(number: Int = 1, isActive: Bool = true) ->
 
 @Test
 func `configured executable takes precedence over PATH and absent PATH is reported safely`() async {
-    let configured = ProviderConfig(
-        id: .claude,
-        claudeSwapEnabled: true,
-        claudeSwapExecutablePath: "configured-fixture")
-    let pathOnly = ProviderConfig(id: .claude, claudeSwapEnabled: true)
+    var configured = ProviderConfig(id: .claude)
+    configured.claudeSwapEnabled = true
+    configured.claudeSwapExecutablePath = "configured-fixture"
+    var pathOnly = ProviderConfig(id: .claude)
+    pathOnly.claudeSwapEnabled = true
     let trace = ClaudeSwapCallTrace()
     let coordinator = ClaudeSwapCoordinator(
         configuredPathResolver: { value in
@@ -111,10 +111,9 @@ func `a successful switch re-reads accounts before publishing`() async {
                 toAccountNumber: number,
                 reason: "fixture")
         })
-    let config = ProviderConfig(
-        id: .claude,
-        claudeSwapEnabled: true,
-        claudeSwapExecutablePath: "configured-fixture")
+    var config = ProviderConfig(id: .claude)
+    config.claudeSwapEnabled = true
+    config.claudeSwapExecutablePath = "configured-fixture"
 
     await coordinator.switchAccount(number: 2, config: config) { payload in
         trace.append("publish")

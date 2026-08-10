@@ -381,7 +381,7 @@ private func notificationRecord(
         tertiary: window,
         updatedAt: Date(timeIntervalSince1970: 1),
         identity: ProviderIdentitySnapshot(
-            providerID: UsageProvider(rawValue: providerID) ?? .claude,
+            providerID: ProviderInstanceID(rawValue: providerID) ?? .claude,
             accountEmail: account,
             accountOrganization: nil,
             loginMethod: nil))

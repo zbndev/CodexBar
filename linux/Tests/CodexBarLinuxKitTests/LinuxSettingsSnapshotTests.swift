@@ -5,11 +5,11 @@ import Testing
 @testable import CodexBarLinuxKit
 
 private func config(_ provider: UsageProvider, header: String?) -> CodexBarConfig {
-    var providerConfig = ProviderConfig(id: provider)
+    var providerConfig = ProviderConfig(id: provider.instanceID)
     providerConfig.cookieSource = .manual
     providerConfig.cookieHeader = header
     var config = CodexBarConfig.makeDefault()
-    config.providers.removeAll { $0.id == provider }
+    config.providers.removeAll { $0.id == provider.instanceID }
     config.providers.append(providerConfig)
     return config
 }
@@ -47,7 +47,7 @@ private func config(_ provider: UsageProvider, header: String?) -> CodexBarConfi
         let environment = UsageRefresher.resolvedEnvironment(
             base: [:],
             provider: descriptor.id,
-            config: stored.providers.first { $0.id == descriptor.id })
+            config: stored.providerConfig(for: descriptor.id.instanceID))
         let viaEnvironment = environment.values.contains("session=value")
         #expect(
             viaSnapshot || viaEnvironment,

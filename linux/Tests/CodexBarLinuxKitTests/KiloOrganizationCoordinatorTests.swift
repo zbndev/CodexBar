@@ -20,13 +20,14 @@ func `organization refresh deduplicates ids and preserves valid selections`() as
 func `organization discovery persists the normalized list and selections together`() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     let configStore = CodexBarConfigStore(fileURL: directory.appendingPathComponent("config.json"))
-    try configStore.save(CodexBarConfig(providers: [ProviderConfig(
+    var seed = ProviderConfig(
         id: .kilo,
         enabled: true,
         source: .api,
-        apiKey: "fixture-key",
-        kiloKnownOrganizations: [KiloOrganization(id: "old", name: "Old", role: nil)],
-        kiloEnabledOrganizationIDs: ["a", "gone"])]))
+        apiKey: "fixture-key")
+    seed.kiloKnownOrganizations = [KiloOrganization(id: "old", name: "Old", role: nil)]
+    seed.kiloEnabledOrganizationIDs = ["a", "gone"]
+    try configStore.save(CodexBarConfig(providers: [seed]))
     let state = KiloOrganizationsState()
     let coordinator = SettingsCoordinator(
         configStore: configStore,

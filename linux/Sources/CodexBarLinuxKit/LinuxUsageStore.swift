@@ -239,7 +239,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
 
     private func startRefresh(descriptor: ProviderDescriptor, config: CodexBarConfig?) -> Task<Void, Never> {
         let mode = UsageRefresher.sourceMode(for: descriptor.id, config: config)
-        let providerConfig = config?.providers.first { $0.id == descriptor.id }
+        let providerConfig = config?.providerConfig(for: descriptor.id.instanceID)
         if descriptor.id == .kilo,
            self.kiloScopes(config: providerConfig).count > 1
         {
@@ -319,7 +319,7 @@ public final class LinuxUsageStore: @unchecked Sendable {
     private func refreshCost(_ record: ProviderRefreshRecord) {
         guard let costStore = self.costStore,
               let provider = UsageProvider(rawValue: record.view.id),
-              let config = self.loadConfig()?.providerConfig(for: provider)
+              let config = self.loadConfig()?.providerConfig(for: provider.instanceID)
         else { return }
         Task.detached {
             await costStore.refresh(providerID: record.view.id, config: config)

@@ -15,7 +15,7 @@ public enum ProviderCatalog {
             config.providers.map { ($0.id, $0.enabled) },
             uniquingKeysWith: { _, last in last })
         return all.filter { descriptor in
-            if let override = overrides[descriptor.id], let enabled = override {
+            if let override = overrides[descriptor.id.instanceID], let enabled = override {
                 return enabled
             }
             return descriptor.metadata.defaultEnabled

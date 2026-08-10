@@ -85,7 +85,7 @@ public final class SettingsCoordinator: @unchecked Sendable {
         let panes = descriptors.map { descriptor in
             ProviderPaneGenerator.pane(
                 for: descriptor,
-                config: config?.providers.first { $0.id == descriptor.id })
+                config: config?.providerConfig(for: descriptor.id.instanceID))
         }
         let settings = self.linuxSettings()
         let hooks = config?.hooks ?? HooksConfig()
@@ -120,10 +120,10 @@ public final class SettingsCoordinator: @unchecked Sendable {
             throw CoordinatorError.unknownProvider(id)
         }
         var config = try self.configStore.load() ?? CodexBarConfig.makeDefault()
-        if let index = config.providers.firstIndex(where: { $0.id == provider }) {
+        if let index = config.providers.firstIndex(where: { $0.id == provider.instanceID }) {
             config.providers[index] = patch.applying(to: config.providers[index])
         } else {
-            config.providers.append(patch.applying(to: ProviderConfig(id: provider)))
+            config.providers.append(patch.applying(to: ProviderConfig(id: provider.instanceID)))
         }
         try self.configStore.save(config)
         self.onChange()
@@ -258,10 +258,10 @@ public final class SettingsCoordinator: @unchecked Sendable {
         }
         var config = try self.configStore.load() ?? CodexBarConfig.makeDefault()
         let index: Int
-        if let existing = config.providers.firstIndex(where: { $0.id == provider }) {
+        if let existing = config.providers.firstIndex(where: { $0.id == provider.instanceID }) {
             index = existing
         } else {
-            config.providers.append(ProviderConfig(id: provider))
+            config.providers.append(ProviderConfig(id: provider.instanceID))
             index = config.providers.index(before: config.providers.endIndex)
         }
         mutation(&config.providers[index])

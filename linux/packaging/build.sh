@@ -20,18 +20,27 @@ package="$(dirname "$here")"
 swift build --package-path "$package" -c release --static-swift-stdlib
 
 binary="$package/.build/release/CodexBarLinux"
-# SwiftPM on Linux emits a plain directory, not a .bundle; Bundle.module
-# resolves it next to the executable.
-resources="$package/.build/release/CodexBarLinux_CodexBarLinuxKit.resources"
+# SwiftPM on Linux emits a plain directory per resource-bearing target, not a
+# .bundle; each one resolves next to the executable. Every dependency's bundle
+# has to ship, not just this package's: CodexBarCore's holds the bundled
+# JavaScript providers (z.ai, xAI, Poe, …) and the plugin prelude, and without
+# it every JS provider fails with "CodexBarCore resource bundle is missing".
+resources=("$package"/.build/release/*.resources)
 
-for path in "$binary" "$resources"; do
-    if [[ ! -e "$path" ]]; then
-        echo "$0: expected build product missing: $path" >&2
+if [[ ! -e "$binary" ]]; then
+    echo "$0: expected build product missing: $binary" >&2
+    exit 1
+fi
+for required in CodexBar_CodexBarCore CodexBarLinux_CodexBarLinuxKit; do
+    if [[ ! -d "$package/.build/release/$required.resources" ]]; then
+        echo "$0: expected build product missing: $required.resources" >&2
         exit 1
     fi
 done
 
 mkdir -p "$output"
 install -Dm755 "$binary" "$output/CodexBarLinux"
-rm -rf "${output:?}/$(basename "$resources")"
-cp -r "$resources" "$output/"
+for resource in "${resources[@]}"; do
+    rm -rf "${output:?}/$(basename "$resource")"
+    cp -r "$resource" "$output/"
+done

@@ -3,6 +3,8 @@
 #
 #   <dest>/usr/lib/codexbar/CodexBarLinux                     the binary
 #   <dest>/usr/lib/codexbar/CodexBarLinux_….resources/WebUI/  Bundle.module
+#   <dest>/usr/lib/codexbar/CodexBar_CodexBarCore.resources/  bundled JS providers
+#   <dest>/usr/lib/codexbar/SweetCookieKit_….resources/       cookie broker
 #   <dest>/usr/bin/codexbar                                   symlink
 #   <dest>/usr/share/codexbar/resources/                      icons + locales
 #   <dest>/usr/share/applications/app.codexbar.linux.desktop

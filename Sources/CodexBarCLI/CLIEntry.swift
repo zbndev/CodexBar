@@ -18,6 +18,15 @@ import FoundationNetworking
 @main
 enum CodexBarCLI {
     static func main() async {
+        if CodexBarCoreResourceSmoke.isRequested() {
+            #if canImport(Darwin)
+            Darwin.exit(CodexBarCoreResourceSmoke.run())
+            #elseif canImport(Glibc)
+            Glibc.exit(CodexBarCoreResourceSmoke.run())
+            #elseif canImport(Musl)
+            Musl.exit(CodexBarCoreResourceSmoke.run())
+            #endif
+        }
         self.configureLinuxTimeZoneIfNeeded()
 
         let rawArgv = Array(CommandLine.arguments.dropFirst())
@@ -68,6 +77,8 @@ enum CodexBarCLI {
                 await self.runDiagnose(invocation.parsedValues)
             case ["guard"]:
                 await self.runGuard(invocation.parsedValues)
+            case let path where path.first == "plugins":
+                await self.runPlugins(path: path, values: invocation.parsedValues)
             default:
                 Self.exit(
                     code: .failure,
@@ -163,7 +174,7 @@ enum CodexBarCLI {
         let diagnoseSignature = CommandSignature.describe(DiagnoseOptions())
         let guardSignature = CommandSignature.describe(GuardOptions())
 
-        return [
+        var descriptors = [
             CommandDescriptor(
                 name: "cards",
                 abstract: "Print usage as a terminal card grid",
@@ -186,13 +197,13 @@ enum CodexBarCLI {
                 signature: costSignature),
             CommandDescriptor(
                 name: "sessions",
-                abstract: "List live Codex and Claude Code sessions",
+                abstract: "List live Codex, Claude Code, pi, and OMP sessions",
                 discussion: nil,
                 signature: CommandSignature(),
                 subcommands: [
                     CommandDescriptor(
                         name: "list",
-                        abstract: "List live Codex and Claude Code sessions",
+                        abstract: "List live Codex, Claude Code, pi, and OMP sessions",
                         discussion: nil,
                         signature: sessionsSignature),
                     CommandDescriptor(
@@ -267,6 +278,29 @@ enum CodexBarCLI {
                 discussion: nil,
                 signature: diagnoseSignature),
         ]
+        descriptors.append(Self.pluginsCommandDescriptor())
+        return descriptors
+    }
+
+    private static func pluginsCommandDescriptor() -> CommandDescriptor {
+        CommandDescriptor(
+            name: "plugins",
+            abstract: "List or fetch user-installed provider plugins",
+            discussion: nil,
+            signature: CommandSignature(),
+            subcommands: [
+                CommandDescriptor(
+                    name: "list",
+                    abstract: "List discovered local plugins",
+                    discussion: nil,
+                    signature: CommandSignature()),
+                CommandDescriptor(
+                    name: "fetch",
+                    abstract: "Fetch one plugin, interactively approving network access when needed",
+                    discussion: nil,
+                    signature: CommandSignature.describe(PluginFetchOptions())),
+            ],
+            defaultSubcommandName: "list")
     }
 
     private static func dashboardCommandDescriptor() -> CommandDescriptor {

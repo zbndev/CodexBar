@@ -645,6 +645,8 @@
 "copyright" = "© 2026 Peter Steinberger. Licenza MIT.";
 
 /* Debug Pane */
+"use_javascriptcore_plugin_engine" = "Usar JavaScriptCore para os complementos de provedores";
+"use_javascriptcore_plugin_engine_subtitle" = "Só como reversión de compatibilidade. Reinicia CodexBar para aplicalo; CODEXBAR_PLUGIN_ENGINE substitúe este axuste.";
 "section_logging" = "Rexistro";
 "enable_file_logging" = "Activar o rexistro en ficheiro";
 "enable_file_logging_subtitle" = "Escribe os rexistros en %@ para depuración.";
@@ -1378,3 +1380,54 @@
 "Resets" = "Reinicios";
 "Finish now" = "Rematar agora";
 "Continue in background" = "Continuar en segundo plano";
+
+"Cumulative" = "Acumulado";
+"Token activity" = "Actividade de tokens";
+"View" = "Vista";
+"in the last year" = "no último ano";
+"No activity in the last 12 months" = "Sen actividade nos últimos 12 meses";
+"Each column = 1 week" = "Cada columna = 1 semana";
+"Running total" = "Total acumulado";
+"Less" = "Menos";
+"More" = "Máis";
+
+/* Provider Plugins */
+"Install…" = "Instalar…";
+"Install plugin" = "Instalar complemento";
+"Copies a JavaScript or TypeScript file into the plugins directory." = "Copia un ficheiro JavaScript ou TypeScript no directorio de complementos.";
+"Show in Finder" = "Amosar no Finder";
+"Plugins directory" = "Directorio de complementos";
+"Provider Plugins" = "Complementos de provedores";
+"Plugins are local JavaScript or TypeScript files. Network and cookie access require approval." = "Os complementos son ficheiros locais JavaScript ou TypeScript. O acceso á rede e ás cookies require aprobación.";
+"No Plugins Installed" = "Non hai complementos instalados";
+"Drop a .js or .ts file into the plugins directory, or choose Install…" = "Solta un ficheiro .js ou .ts no directorio de complementos ou escolle Instalar…";
+"Delete Plugin?" = "Queres eliminar o complemento?";
+"Delete" = "Eliminar";
+"This removes the plugin file, transpile cache, approval, saved settings and secrets, and history." = "Isto elimina o ficheiro do complemento, a caché de transpilación, a aprobación, os axustes e segredos gardados e o historial.";
+"Plugin Error" = "Erro do complemento";
+"Needs approval" = "Precisa aprobación";
+"File" = "Ficheiro";
+"Origins" = "Orixes";
+"Configure endpoint settings" = "Configurar os axustes dos puntos de conexión";
+"Capabilities" = "Capacidades";
+"Network" = "Rede";
+"Cookie domains" = "Dominios das cookies";
+"Approve…" = "Aprobar…";
+"Delete…" = "Eliminar…";
+"Unknown validation error" = "Erro de validación descoñecido";
+"Approve Plugin" = "Aprobar o complemento";
+"Install and Approve Plugin" = "Instalar e aprobar o complemento";
+"Network authority" = "Autorización de rede";
+"Auth: %@" = "Autenticación: %@";
+"Capabilities: %@" = "Capacidades: %@";
+"network" = "rede";
+"Secrets: %@" = "Segredos: %@";
+"none" = "ningún";
+"Cookie domains: %@" = "Dominios das cookies: %@";
+"Type %@ to confirm" = "Escribe %@ para confirmar";
+"Enter every endpoint setting to review the exact network origins." = "Introduce todos os axustes dos puntos de conexión para revisar as orixes de rede exactas.";
+"Approve" = "Aprobar";
+"Install" = "Instalar";
+"5-hour usage" = "Uso de 5 horas";
+"7-day usage" = "Uso de 7 días";
+"Total usage" = "Uso total";

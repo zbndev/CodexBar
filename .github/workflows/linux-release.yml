@@ -20,28 +20,28 @@ on:
         type: boolean
         default: false
 
+# Only the job that publishes needs write. Everything before it builds,
+# packages and verifies with a read-only token.
 permissions:
-  contents: write
+  contents: read
 
-env:
-  SWIFT_VERSION: 6.3.3
-  SWIFTLY_VERSION: 1.1.3
-  SWIFTLY_SIGNING_FINGERPRINT: E813C892820A6FA13755B268F167DF1ACF9CE069
+# Two dispatches of one version would race for a single tag, and the loser
+# would only find out after paying for a full release build.
+concurrency:
+  group: linux-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    # Everything runs inside the checkout, which is deliberately not the
+    # default location — see the checkout step in `validate`.
+    working-directory: CodexBar
 
 jobs:
-  release:
-    # Not a supported target — a build host. Its glibc (2.39) is the oldest of
-    # any candidate, and glibc is forward- but not backward-compatible, so its
-    # output runs on every supported distribution. Building on a newer host
-    # produces binaries that die on Debian 13 with "GLIBC_2.43 not found".
-    # See linux/packaging/NOTES.md.
+  # Fails in seconds on a typo, before two expensive jobs start.
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    defaults:
-      run:
-        # Everything runs inside the checkout, which is deliberately not the
-        # default location — see the checkout step.
-        working-directory: CodexBar
+    timeout-minutes: 5
     steps:
       # Checked out as "CodexBar", not the repository name. linux/Package.swift
       # declares `.package(path: "..")` and its targets ask for
@@ -50,7 +50,8 @@ jobs:
       # out as the repository name (CodexBar-Linux) fails resolution with
       # "unknown package 'CodexBar' in dependencies of target
       # 'CodexBarLinuxKit'". Nothing else builds linux/ in CI, so this only
-      # ever surfaces here.
+      # ever surfaces here. Every job checks out the same way so that
+      # `working-directory` above holds for all of them.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           path: CodexBar
@@ -70,77 +71,57 @@ jobs:
             exit 1
           fi
 
+  # Runs alongside `build` rather than ahead of it: the debug build the tests
+  # need and the release build the packages need share nothing, so serializing
+  # them only added the shorter of the two to the critical path.
+  test:
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: CodexBar
+
       - name: Install build dependencies
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y \
-            pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libcurl4-openssl-dev \
-            dpkg-dev rpm file desktop-file-utils zsync
+            pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libcurl4-openssl-dev
 
-      - name: Restore Swift toolchain cache
-        id: swift-toolchain-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.local/share/swiftly
-          key: swift-${{ runner.os }}-${{ runner.arch }}-${{ env.SWIFT_VERSION }}-swiftly-${{ env.SWIFTLY_VERSION }}
-
-      - name: Install Swift ${{ env.SWIFT_VERSION }} via swiftly
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          missing_packages=()
-          for package in ca-certificates gpg libcurl4-openssl-dev; do
-            if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
-              missing_packages+=("$package")
-            fi
-          done
-          if [[ "${#missing_packages[@]}" -gt 0 ]]; then
-            sudo apt-get update
-            sudo apt-get install -y "${missing_packages[@]}"
-          fi
-
-          SWIFTLY_ARCH="$(uname -m)"
-          SWIFTLY_ARCHIVE="$RUNNER_TEMP/swiftly-${SWIFTLY_VERSION}-${SWIFTLY_ARCH}.tar.gz"
-          SWIFTLY_SIGNATURE="${SWIFTLY_ARCHIVE}.sig"
-          SWIFTLY_HOME_DIR="$HOME/.local/share/swiftly"
-          SWIFTLY_BIN_DIR="$HOME/.local/bin"
-          SWIFT_GNUPGHOME="$(mktemp -d)"
-          SWIFT_KEYS="$RUNNER_TEMP/swift-signing-keys.asc"
-          POST_INSTALL_SCRIPT="$(mktemp)"
-
-          mkdir -p "$SWIFTLY_BIN_DIR"
-          chmod 700 "$SWIFT_GNUPGHOME"
-          echo "Swift toolchain cache hit: ${{ steps.swift-toolchain-cache.outputs.cache-hit }}"
-          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-${SWIFTLY_VERSION}-${SWIFTLY_ARCH}.tar.gz" -o "$SWIFTLY_ARCHIVE"
-          curl -fsSL "https://download.swift.org/swiftly/linux/swiftly-${SWIFTLY_VERSION}-${SWIFTLY_ARCH}.tar.gz.sig" -o "$SWIFTLY_SIGNATURE"
-          curl -fsSL --compressed "https://www.swift.org/keys/all-keys.asc" -o "$SWIFT_KEYS"
-          GNUPGHOME="$SWIFT_GNUPGHOME" gpg --batch --import "$SWIFT_KEYS"
-          SIGNATURE_STATUS="$(GNUPGHOME="$SWIFT_GNUPGHOME" gpg --batch --status-fd=1 \
-            --verify "$SWIFTLY_SIGNATURE" "$SWIFTLY_ARCHIVE" 2>&1)"
-          printf '%s\n' "$SIGNATURE_STATUS"
-          grep -Fq "[GNUPG:] VALIDSIG ${SWIFTLY_SIGNING_FINGERPRINT} " <<< "$SIGNATURE_STATUS"
-          tar -xzf "$SWIFTLY_ARCHIVE" -C /tmp
-          /tmp/swiftly init --assume-yes --skip-install
-
-          . "$SWIFTLY_HOME_DIR/env.sh"
-          echo "$SWIFTLY_BIN_DIR" >> "$GITHUB_PATH"
-          echo "SWIFTLY_HOME_DIR=$SWIFTLY_HOME_DIR" >> "$GITHUB_ENV"
-          echo "SWIFTLY_BIN_DIR=$SWIFTLY_BIN_DIR" >> "$GITHUB_ENV"
-
-          swiftly install "$SWIFT_VERSION" --use --assume-yes --verify --post-install-file "$POST_INSTALL_SCRIPT"
-          if [[ -s "$POST_INSTALL_SCRIPT" ]]; then
-            sudo apt-get update
-            sudo bash "$POST_INSTALL_SCRIPT"
-          fi
-
-          hash -r
-          swift --version
+      - uses: ./CodexBar/.github/actions/setup-swift-linux
 
       - name: Run the tests
         run: swift test --package-path linux
+
+  build:
+    # Not a supported target — a build host. Its glibc (2.39) is the oldest of
+    # any candidate, and glibc is forward- but not backward-compatible, so its
+    # output runs on every supported distribution. Building on a newer host
+    # produces binaries that die on Debian 13 with "GLIBC_2.43 not found".
+    # See linux/packaging/NOTES.md.
+    #
+    # Only this job needs to be that host. The packagers below read the tree it
+    # produces and compile nothing, so where they run does not matter.
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: CodexBar
+
+      - name: Install build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libcurl4-openssl-dev
+
+      - uses: ./CodexBar/.github/actions/setup-swift-linux
 
       - name: Stamp the version
         run: linux/packaging/set-version.sh "${{ inputs.version }}"
@@ -151,66 +132,167 @@ jobs:
       - name: Smoke-test the staged binary
         run: "$RUNNER_TEMP/root/usr/bin/codexbar --version"
 
-      - name: Build the packages
+      - name: Pack the staged tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A tarball, not the tree itself: upload-artifact drops the
+          # executable bit and dereferences symlinks, and the staged tree needs
+          # both — dpkg refuses a package whose /usr/bin/codexbar arrived as a
+          # copy rather than as the relative symlink stage.sh made.
+          #
+          # This is also a release asset, so the packaging jobs and the release
+          # share one file instead of building two.
+          mkdir -p "$RUNNER_TEMP/artifacts"
+          tar -C "$RUNNER_TEMP/root" -czf \
+            "$RUNNER_TEMP/artifacts/codexbar-${{ inputs.version }}-x86_64.tar.gz" usr
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: staged-tree
+          path: ${{ runner.temp }}/artifacts/codexbar-${{ inputs.version }}-x86_64.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+          # Already compressed; recompressing costs time and saves nothing.
+          compression-level: 0
+
+  # One leg per artifact, each building its package and immediately installing
+  # it in the distribution it targets. Build and verify stay in the same leg on
+  # purpose: a separate verify job would have to depend on the whole matrix,
+  # since a matrix leg cannot depend on another leg, which would put a barrier
+  # where there is no dependency.
+  package:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      # A broken packager should not hide the state of the other three.
+      fail-fast: false
+      matrix:
+        include:
+          - id: deb
+            apt: dpkg-dev
+            script: make-deb.sh
+            image: debian:13
+            verify: |
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq /pkg/codexbar_*_amd64.deb >/dev/null
+              codexbar --version
+          - id: rpm
+            apt: rpm
+            script: make-rpm.sh
+            image: fedora:42
+            verify: |
+              dnf install -y -q /pkg/codexbar-*.x86_64.rpm >/dev/null
+              codexbar --version
+          - id: appimage
+            apt: file desktop-file-utils zsync
+            script: make-appimage.sh
+            image: debian:13
+            verify: |
+              # A thin bundle by design, so gtk4 and webkitgtk come from the
+              # host — see linux/packaging/NOTES.md for why bundling WebKit
+              # cannot work.
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq
+              apt-get install -y -qq libgtk-4-1 libwebkitgtk-6.0-4 libsqlite3-0 >/dev/null
+              /pkg/CodexBar-*.AppImage --appimage-extract-and-run --version
+          # Arch has no hosted runner and could not build this anyway — its
+          # glibc is newer than every supported target. The container only
+          # packages the tree the build job already produced. Installing it is
+          # also the proof that a binary built against glibc 2.39 runs on the
+          # newest glibc any target ships, which is the whole reason the build
+          # host is the oldest candidate rather than the newest.
+          - id: arch
+            apt: ""
+            script: make-arch.sh
+            image: archlinux:base
+            verify: |
+              pacman -Sy --noconfirm >/dev/null
+              pacman -U --noconfirm /pkg/codexbar-linux-*.pkg.tar.zst >/dev/null
+              codexbar --version
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: CodexBar
+
+      # No Swift and no gtk headers here: the packagers read a finished tree.
+      - name: Install packaging dependencies
+        if: matrix.apt != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.apt }}
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: staged-tree
+          path: ${{ runner.temp }}/staged
+
+      - name: Unpack the staged tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/root"
+          tar -C "$RUNNER_TEMP/root" -xzf "$RUNNER_TEMP/staged"/codexbar-*.tar.gz
+
+      - name: Build the ${{ matrix.id }} package
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/artifacts"
-          linux/packaging/make-deb.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
-          linux/packaging/make-rpm.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
-          linux/packaging/make-appimage.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
-          # Arch has no hosted runner and could not build this anyway — its
-          # glibc is newer than every supported target. The container only
-          # packages the tree the release host already built.
-          linux/packaging/make-arch.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
-          tar -C "$RUNNER_TEMP/root" -czf \
-            "$RUNNER_TEMP/artifacts/codexbar-${{ inputs.version }}-x86_64.tar.gz" usr
+          "linux/packaging/${{ matrix.script }}" \
+            "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
 
-      - name: Verify the deb installs and runs on Debian 13
+      - name: Verify it installs and runs on ${{ matrix.image }}
         shell: bash
+        env:
+          # Through a file rather than inline in the docker command line, so
+          # the snippet goes through exactly one round of shell quoting.
+          VERIFY: ${{ matrix.verify }}
         run: |
           set -euo pipefail
-          docker run --rm -v "$RUNNER_TEMP/artifacts:/pkg:ro" debian:13 bash -lc '
-            set -euo pipefail
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            apt-get install -y -qq /pkg/codexbar_*_amd64.deb >/dev/null
-            codexbar --version'
+          printf '%s\n' "$VERIFY" > "$RUNNER_TEMP/verify.sh"
+          docker run --rm \
+            -v "$RUNNER_TEMP/artifacts:/pkg:ro" \
+            -v "$RUNNER_TEMP/verify.sh:/verify.sh:ro" \
+            "${{ matrix.image }}" bash -euo pipefail /verify.sh
 
-      - name: Verify the rpm installs and runs on Fedora 42
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker run --rm -v "$RUNNER_TEMP/artifacts:/pkg:ro" fedora:42 bash -lc '
-            set -euo pipefail
-            dnf install -y -q /pkg/codexbar-*.x86_64.rpm >/dev/null
-            codexbar --version'
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-${{ matrix.id }}
+          path: ${{ runner.temp }}/artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
 
-      - name: Verify the AppImage runs on Debian 13
-        shell: bash
-        run: |
-          set -euo pipefail
-          # A thin bundle by design, so gtk4 and webkitgtk come from the host —
-          # see linux/packaging/NOTES.md for why bundling WebKit cannot work.
-          docker run --rm -v "$RUNNER_TEMP/artifacts:/pkg:ro" debian:13 bash -lc '
-            set -euo pipefail
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            apt-get install -y -qq libgtk-4-1 libwebkitgtk-6.0-4 libsqlite3-0 >/dev/null
-            /pkg/CodexBar-*.AppImage --appimage-extract-and-run --version'
+  release:
+    needs: [test, package]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      # gh reads the repository from the checkout's remote.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: CodexBar
 
-      - name: Verify the pacman package installs and runs on Arch
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Also the proof that a binary built against glibc 2.39 runs on the
-          # newest glibc any target ships, which is the whole reason the
-          # release host is the oldest candidate rather than the newest.
-          docker run --rm -v "$RUNNER_TEMP/artifacts:/pkg:ro" archlinux:base bash -lc '
-            set -euo pipefail
-            pacman -Sy --noconfirm >/dev/null
-            pacman -U --noconfirm /pkg/codexbar-linux-*.pkg.tar.zst >/dev/null
-            codexbar --version'
+      # The staged tarball is both the transfer medium between jobs and a
+      # release asset, so it lands in the same directory as the packages and is
+      # covered by the same checksums.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: staged-tree
+          path: ${{ runner.temp }}/artifacts
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: package-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/artifacts
 
       - name: Checksum everything
         shell: bash

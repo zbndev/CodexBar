@@ -139,7 +139,7 @@
 
 /* --- Charts ---------------------------------------------------------------- */
 
-/* The SVG scales to the pane; its 320x96 viewBox keeps the label band under
+/* The SVG scales to the pane; its 320x56 viewBox keeps the label band under
    the plot at every width. Empty states arrive as plain text from the
    renderer, so the holder styles both. */
 .history-chart {
@@ -154,6 +154,22 @@
   fill: var(--fg-dim);
   font-size: 6px;
   font-family: var(--font-ui);
+}
+
+/* The floor the series stands on, drawn across the full width so it stays
+   visible in the gaps between segments. A token, not an rgba literal: the
+   light theme exists too. */
+.history-chart .chart-baseline {
+  stroke: var(--divider);
+  stroke-width: 0.6;
+}
+
+/* One invisible hover target per segment. `transparent` rather than `none`:
+   a fill of `none` is not painted, and an unpainted shape takes no pointer
+   events, so the title would never open. */
+.history-chart .chart-hit {
+  fill: transparent;
+  pointer-events: all;
 }
 
 /* Focus rings inside SVG: the shared :focus-visible outline does not paint on

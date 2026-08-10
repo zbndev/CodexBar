@@ -46,11 +46,13 @@ hand with a version. They cover `x86_64` only.
 |---|---|
 | `codexbar_<version>_amd64.deb` | Debian 13+, Ubuntu 25.10+ |
 | `codexbar-<version>-1.x86_64.rpm` | Fedora 42+ |
+| `codexbar-linux-<version>-1-x86_64.pkg.tar.zst` | Arch, via `pacman -U` |
 | `CodexBar-<version>-x86_64.AppImage` | any glibc distribution with gtk4 and webkitgtk-6.0 |
-| `PKGBUILD` | Arch, via `updpkgsums && makepkg -si` |
 
 The Swift runtime is linked statically, so a package depends only on `gtk4`,
-`webkitgtk-6.0`, `glib2`, `libcurl` and `sqlite3`.
+`webkitgtk-6.0`, `glib2`, `libcurl` and `sqlite3`. The Arch package is a
+prebuilt one rather than a `PKGBUILD`, so installing it needs no Swift
+toolchain from the AUR.
 
 Ubuntu 24.04 is not supported: it predates gtk4 4.18. It is still the *build*
 host, because its glibc is the oldest of any candidate and glibc is forward-

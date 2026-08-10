@@ -159,6 +159,10 @@ jobs:
           linux/packaging/make-deb.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
           linux/packaging/make-rpm.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
           linux/packaging/make-appimage.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
+          # Arch has no hosted runner and could not build this anyway — its
+          # glibc is newer than every supported target. The container only
+          # packages the tree the release host already built.
+          linux/packaging/make-arch.sh "$RUNNER_TEMP/root" "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
           tar -C "$RUNNER_TEMP/root" -czf \
             "$RUNNER_TEMP/artifacts/codexbar-${{ inputs.version }}-x86_64.tar.gz" usr
 
@@ -195,9 +199,18 @@ jobs:
             apt-get install -y -qq libgtk-4-1 libwebkitgtk-6.0-4 libsqlite3-0 >/dev/null
             /pkg/CodexBar-*.AppImage --appimage-extract-and-run --version'
 
-      - name: Fill in the PKGBUILD checksum
+      - name: Verify the pacman package installs and runs on Arch
         shell: bash
-        run: linux/packaging/prepare-pkgbuild.sh "${{ inputs.version }}" "$RUNNER_TEMP/artifacts"
+        run: |
+          set -euo pipefail
+          # Also the proof that a binary built against glibc 2.39 runs on the
+          # newest glibc any target ships, which is the whole reason the
+          # release host is the oldest candidate rather than the newest.
+          docker run --rm -v "$RUNNER_TEMP/artifacts:/pkg:ro" archlinux:base bash -lc '
+            set -euo pipefail
+            pacman -Sy --noconfirm >/dev/null
+            pacman -U --noconfirm /pkg/codexbar-linux-*.pkg.tar.zst >/dev/null
+            codexbar --version'
 
       - name: Checksum everything
         shell: bash
@@ -219,7 +232,7 @@ jobs:
           gh release create "$tag" \
             --target "${{ github.sha }}" \
             --title "CodexBar for Linux ${{ inputs.version }}" \
-            --notes "Linux GUI build. Artifacts: .deb (Debian 13+ / Ubuntu 25.10+), .rpm (Fedora 42+), .AppImage, source PKGBUILD." \
+            --notes "Linux GUI build. Artifacts: .deb (Debian 13+ / Ubuntu 25.10+), .rpm (Fedora 42+), .pkg.tar.zst (Arch), .AppImage." \
             ${{ inputs.prerelease && '--prerelease' || '' }} \
             ${{ inputs.draft && '--draft' || '' }} \
             "$RUNNER_TEMP"/artifacts/*

@@ -219,28 +219,52 @@ regress the tray:
 None of these can be checked headlessly, and no packaged build has been run on
 a desktop yet:
 
-Done: `makepkg` from the released tag archive builds a
-`codexbar-linux-0.1.0-1-x86_64.pkg.tar.zst` whose `usr/bin/codexbar --version`
-reports `0.1.0`, with the same layout as the `.deb`. Two traps had to be
-cleared first, both worth knowing before editing the recipe:
+Arch is served by a prebuilt `.pkg.tar.zst`, not a `PKGBUILD`. The release
+ships one, `make-arch.sh` generates the recipe the way `make-deb.sh` generates
+`DEBIAN/control`, and `makepkg` runs in an `archlinux:base-devel` container
+because the release host is Ubuntu. Three facts hold that arrangement in place:
 
-- GitHub names the directory inside a tag archive after the **canonical**
-  repository, so it unpacks as `CodexBar-Linux-linux-v<pkgver>`. A redirect
-  from an older repository name serves the download but does not rename that
-  directory. `prepare()` then renames it to `CodexBar`, because SwiftPM takes
-  a path dependency's identity from the directory name and
-  `linux/Package.swift` asks for `package: "CodexBar"`. A symlink does not
-  work — SwiftPM resolves it back.
-- `package()` runs under fakeroot, where `swift-package` **segfaults**. So
-  `build.sh` takes `CODEXBAR_SKIP_BUILD=1` and the recipe builds in `build()`,
-  staging only in `package()`.
+- **The recipe must not build anything.** `package()` runs under fakeroot,
+  where `swift-package` **segfaults** — the crash is a null dereference through
+  `libfakeroot`'s `unlink` interposition, inside SwiftPM's manifest loader. So
+  the recipe only copies a tree `stage.sh` produced outside fakeroot.
+- **Arch cannot be the build host.** Its glibc (2.44) is newer than every
+  supported target, and glibc is forward- but not backward-compatible. The
+  container packages the Ubuntu-built binary; the verification step then
+  installs it with `pacman -U` on Arch, which is also the proof that a
+  glibc-2.39 binary runs on 2.44.
+- **The recipe is generated, never committed.** A committed `PKGBUILD` fetched
+  a release tag, and its `pkgver` named the *previous* tag, so `makepkg -si`
+  from a checkout silently built a commit older than the recipe reading it.
+  Generated metadata cannot drift from the tree it describes.
+
+`pkgver` cannot carry a `-`, and pacman has no equivalent of rpm's `~`, so a
+prerelease becomes `1.2.3_rc.1`. Measured: `vercmp 0.1.2_rc.1 0.1.2` returns
+`1`, so a prerelease orders *after* the release it precedes. Only `pacman -U`
+installs this artifact, so nothing consults that ordering.
+
+The container prints `libfakeroot internal error: payload not recognized!`
+once. It is cosmetic — the package it produces was diffed against one built by
+a native `makepkg` and matches, `root:root` ownership and `uid=0 gid=0` in
+`.MTREE` included, which is exactly what fakeroot is responsible for.
+
+To build and install the package from a checkout:
+
+    linux/packaging/stage.sh /tmp/codexbar-root
+    linux/packaging/make-arch.sh /tmp/codexbar-root 0.0.0.dev /tmp/codexbar-out
+    sudo pacman -U /tmp/codexbar-out/*.pkg.tar.zst
+
+`make-arch.sh` uses a native `makepkg` when one exists and the container
+otherwise, so this runs the same code the release does. Skipping
+`set-version.sh` is deliberate: the binary then reports `0.0.0-dev` and cannot
+be mistaken for a released one.
 
 `makepkg` warns `Package contains reference to $srcdir` for the binary. That is
 `options=('!strip')` leaving build paths in the debug info; stripping a
 statically linked Swift binary is the riskier of the two, so the warning
 stands.
 
-- [ ] `makepkg -si` installs system-wide and the installed binary runs.
+- [ ] `pacman -U` installs system-wide and the installed binary runs.
 - [ ] The AppImage's popup visibly renders. The process model is verified (see
       above), the pixels are not.
 - [ ] Settings opens and provider brand icons appear in the provider panes —

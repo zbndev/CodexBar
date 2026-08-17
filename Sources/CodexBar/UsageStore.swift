@@ -58,6 +58,7 @@ extension UsageStore {
         _ = self.refreshingProviders
         _ = self.statuses
         _ = self.tokenSnapshotPublications
+        _ = self.spendDashboardTokenPublications
         _ = self.historicalPaceRevision
         return 0
     }
@@ -73,7 +74,6 @@ extension UsageStore {
                 self.probeLogs = [:]
                 guard self.startupBehavior.automaticallyStartsBackgroundWork else { return }
                 self.startTimer()
-                self.startTokenTimer()
                 self.updateProviderRuntimes()
                 let enabledNow = Set(self.settings.enabledProvidersOrdered(
                     metadataByProvider: self.providerMetadata))
@@ -185,6 +185,8 @@ final class UsageStore {
     var tokenSnapshots: [ProviderInstanceID: CostUsageTokenSnapshot] = [:]
     var tokenSnapshotPublications: [ProviderInstanceID: TokenSnapshotPublication] = [:]
     var tokenSnapshotPublicationRevisions: [ProviderInstanceID: UInt64] = [:]
+    var spendDashboardTokenPublications: [ProviderInstanceID: TokenSnapshotPublication] = [:]
+    var spendDashboardTokenPublicationRevisions: [ProviderInstanceID: UInt64] = [:]
     var tokenErrors: [ProviderInstanceID: String] = [:]
     var tokenRefreshInFlight: Set<ProviderInstanceID> = []
     var codexCostCatchUpActivity: CodexCostCatchUpActivity?
@@ -199,6 +201,8 @@ final class UsageStore {
     var openAIDashboardCookieImportDebugLog: String?
     var versions: [ProviderInstanceID: String] = [:]
     @ObservationIgnored var versionDetectionProviders: Set<ProviderInstanceID> = []
+    @ObservationIgnored private(set) var versionDetectionTask: Task<Void, Never>?
+    @ObservationIgnored var claudeVersionRefreshTask: Task<Void, Never>?
     var isRefreshing = false
     var hasForcedRefreshEnrichmentInFlight = false
     var refreshingProviders: Set<ProviderInstanceID> = []
@@ -227,6 +231,7 @@ final class UsageStore {
     @ObservationIgnored var lastOpenAIDashboardTargetEmail: String?
     @ObservationIgnored var lastOpenAIDashboardTargetIsolationKey: String?
     @ObservationIgnored var lastOpenAIDashboardAttemptAt: Date?
+    @ObservationIgnored var lastOpenAIDashboardPageScrapeAt: Date?
     @ObservationIgnored var lastOpenAIDashboardCookieImportAttemptAt: Date?
     @ObservationIgnored var lastOpenAIDashboardCookieImportEmail: String?
     @ObservationIgnored var lastCodexAccountScopedRefreshGuard: CodexAccountScopedRefreshGuard?
@@ -342,10 +347,12 @@ final class UsageStore {
     /// In-memory only; paths and session identities never enter the refresh policy.
     @ObservationIgnored private(set) var lastCodingActivityAt: Date?
     @ObservationIgnored var adaptiveRefreshScheduledAt: Date?
-    @ObservationIgnored var tokenTimerTask: Task<Void, Never>?
     @ObservationIgnored var tokenRefreshSequenceTask: Task<Void, Never>?
     @ObservationIgnored var tokenRefreshSequenceToken: UUID?
     @ObservationIgnored var tokenRefreshSequenceProvider: ProviderInstanceID?
+    @ObservationIgnored var tokenRefreshSequenceIsForcedAllPass = false
+    @ObservationIgnored var pendingForcedTokenRefresh = false
+    @ObservationIgnored var lastForcedTokenRefreshStartedAt: Date?
     @ObservationIgnored var tokenRefreshRetryProviders: Set<ProviderInstanceID> = []
     @ObservationIgnored var codexCostCatchUpTask: Task<Void, Never>?
     @ObservationIgnored var codexCostCatchUpToken: UUID?
@@ -353,12 +360,14 @@ final class UsageStore {
     @ObservationIgnored var codexCostCatchUpMode: CodexCostCatchUpMode = .automatic
     @ObservationIgnored var codexCostCatchUpStopRequested = false
     @ObservationIgnored var codexCostCatchUpPassIsRunning = false
+    @ObservationIgnored var codexCostCatchUpRestartRequested = false
     @ObservationIgnored var spendDashboardCodexCostCatchUpTask: Task<Void, Never>?
     @ObservationIgnored var spendDashboardCodexCostCatchUpToken: UUID?
     @ObservationIgnored var spendDashboardCodexCostCatchUpScopeSignature: String?
     @ObservationIgnored var spendDashboardCodexCostCatchUpMode: CodexCostCatchUpMode = .automatic
     @ObservationIgnored var spendDashboardCodexCostCatchUpStopRequested = false
     @ObservationIgnored var spendDashboardCodexCostCatchUpPassIsRunning = false
+    @ObservationIgnored var spendDashboardCodexCostCatchUpRestartRequested = false
     @ObservationIgnored var forcedRefreshEnrichmentTask: Task<Void, Never>?
     @ObservationIgnored var forcedRefreshEnrichmentToken: UUID?
     @ObservationIgnored var pendingForcedRefreshEnrichmentTask: Task<Void, Never>?
@@ -392,6 +401,9 @@ final class UsageStore {
     @ObservationIgnored var codexHistoricalDataset: CodexHistoricalDataset?
     @ObservationIgnored var codexHistoricalDatasetAccountKey: String?
     @ObservationIgnored var lastKnownResetSnapshots: [ProviderInstanceID: UsageSnapshot] = [:]
+    /// A stable ambient Auto refresh failed after every live Claude source was exhausted, so persisted
+    /// plan-utilization history may safely supply a stale presentation snapshot for the same profile.
+    @ObservationIgnored var claudeHistoryFallbackEligible = false
     @ObservationIgnored var deepseekProfileTransition: DeepSeekProfileTransition?
     @ObservationIgnored var sessionQuotaTransitionStates: [ProviderInstanceID: SessionQuotaTransitionState] = [:]
     @ObservationIgnored var codexSessionQuotaBaselineRequirement: CodexSessionQuotaBaselineRequirement?
@@ -410,6 +422,9 @@ final class UsageStore {
     @ObservationIgnored var lastPermissionPromptNotificationAt: [ProviderInstanceID: Date] = [:]
     @ObservationIgnored var lastTokenFetchAt: [ProviderInstanceID: Date] = [:]
     @ObservationIgnored var lastTokenFetchScope: [ProviderInstanceID: String] = [:]
+    @ObservationIgnored var lastSpendDashboardTokenFetchAt: [ProviderInstanceID: Date] = [:]
+    @ObservationIgnored var lastSpendDashboardTokenFetchScope: [ProviderInstanceID: String] = [:]
+    @ObservationIgnored var spendDashboardTokenRefreshInFlight: Set<ProviderInstanceID> = []
     @ObservationIgnored var planUtilizationHistory: [ProviderInstanceID: PlanUtilizationHistoryBuckets] = [:]
     @ObservationIgnored var sessionEquivalentBurnCache: [ProviderInstanceID: SessionEquivalentBurnCacheEntry] = [:]
     @ObservationIgnored var sessionEquivalentHistoryScanCount: Int = 0
@@ -424,10 +439,9 @@ final class UsageStore {
     @ObservationIgnored private var hasCompletedInitialRefresh: Bool = false
     @ObservationIgnored private let providerAvailabilityCacheTTL: TimeInterval = 1
     @ObservationIgnored let accountInfoCacheTTL: TimeInterval = 30
-    /// Token scans can cause an additional widget snapshot publication. Keep the shortest automatic
-    /// cadence at five minutes so one- and two-minute provider refreshes do not exhaust WidgetKit's
-    /// reload budget or repeatedly traverse large local histories.
-    static let minimumTokenFetchTTL: TimeInterval = 5 * 60
+    /// Energy/WidgetKit floor for expensive local-history scans and their additional snapshot publications.
+    /// Faster provider refreshes still update quota/status normally, but reuse token-cost history within this TTL.
+    static let minimumTokenFetchTTL: TimeInterval = 15 * 60
 
     var tokenFetchTTL: TimeInterval? {
         Self.tokenFetchTTL(
@@ -540,7 +554,6 @@ final class UsageStore {
         }
         Task { await self.refresh(enrichmentMode: .automatic) }
         self.startTimer()
-        self.startTokenTimer()
     }
 
     var iconStyle: IconStyle {
@@ -929,7 +942,6 @@ final class UsageStore {
 
     deinit {
         self.timerTask?.cancel()
-        self.tokenTimerTask?.cancel()
         self.tokenRefreshSequenceTask?.cancel()
         self.codexCostCatchUpTask?.cancel()
         self.forcedRefreshEnrichmentTask?.cancel()
@@ -1350,9 +1362,13 @@ extension UsageStore {
         self.versionDetectionProviders = enabled
         let implementations = Self.versionDetectionImplementations(
             enabled: Set(enabled.compactMap(\.firstPartyProvider)))
+        // Provider-specific by design: only Claude's version probe is background-gated and needs recovery handling.
+        let probesClaude = implementations.contains { $0.id == .claude }
         let browserDetection = self.browserDetection
-        Task { @MainActor [weak self] in
-            let resolved = await Task.detached { () -> [UsageProvider: String] in
+        self.versionDetectionTask = Task { @MainActor [weak self] in
+            let detection = await Task.detached { () -> (
+                resolved: [UsageProvider: String],
+                claudeBinaryResolvable: Bool) in
                 var resolved: [UsageProvider: String] = [:]
                 await withTaskGroup(of: (UsageProvider, String?).self) { group in
                     for implementation in implementations {
@@ -1368,9 +1384,27 @@ extension UsageStore {
                         resolved[provider] = version
                     }
                 }
-                return resolved
+                // Provider-specific by design: disabled providers must not be probed (#2267), so the
+                // Claude binary resolves only when Claude was in this run and its probe returned nil.
+                let claudeBinaryResolvable = probesClaude
+                    && resolved[.claude] == nil
+                    && ProviderVersionDetector.claudeBinaryResolvable()
+                return (resolved, claudeBinaryResolvable)
             }.value
-            self?.versions = Dictionary(uniqueKeysWithValues: resolved.map { ($0.key.instanceID, $0.value) })
+            guard let self else { return }
+            let resolved = detection.resolved
+            var versions = Dictionary(uniqueKeysWithValues: resolved.map { ($0.key.instanceID, $0.value) })
+            let claudeID = UsageProvider.claude.instanceID
+            // A gated or failed Claude probe preserves a user-initiated recovery while the binary still resolves.
+            // A missing/uninstalled binary clears the version so stale data does not survive CLI removal.
+            if probesClaude,
+               resolved[.claude] == nil,
+               detection.claudeBinaryResolvable,
+               let recoveredClaudeVersion = self.versions[claudeID]
+            {
+                versions[claudeID] = recoveredClaudeVersion
+            }
+            self.versions = versions
         }
     }
 
@@ -1578,10 +1612,13 @@ extension UsageStore {
             self.cancelSpendDashboardCodexCostCatchUp()
         }
         self.clearTokenSnapshot(for: provider)
+        self.clearSpendDashboardTokenSnapshot(for: provider)
         self.tokenErrors[provider.instanceID] = nil
         self.tokenFailureGates[provider.instanceID]?.reset()
         self.lastTokenFetchAt.removeValue(forKey: provider.instanceID)
         self.lastTokenFetchScope.removeValue(forKey: provider.instanceID)
+        self.lastSpendDashboardTokenFetchAt.removeValue(forKey: provider.instanceID)
+        self.lastSpendDashboardTokenFetchScope.removeValue(forKey: provider.instanceID)
     }
 
     private func logTokenUsageSuccess(

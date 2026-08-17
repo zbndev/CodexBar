@@ -4,6 +4,9 @@ import CodexBarCore
 import SwiftUI
 
 func spendDashboardDayRangeText(_ days: Int) -> String {
+    if days >= SpendDashboardSource.scanDays {
+        return L("All")
+    }
     let template: String
     switch days {
     case 7: template = L("7d")
@@ -140,10 +143,11 @@ struct SpendDashboardPane: View {
             Picker(L("Time range"), selection: self.daysBinding) {
                 Text(spendDashboardDayRangeText(7)).tag(7)
                 Text(spendDashboardDayRangeText(30)).tag(30)
+                Text(spendDashboardDayRangeText(SpendDashboardSource.scanDays)).tag(SpendDashboardSource.scanDays)
             }
             .labelsHidden()
             .pickerStyle(.segmented)
-            .frame(width: 116)
+            .frame(width: 188)
 
             Button {
                 self.controller.refresh()
@@ -306,7 +310,9 @@ struct SpendDashboardPane: View {
             }
         } else {
             ForEach(self.controller.model.groups) { group in
-                SpendCurrencySection(group: group, requestedDays: self.controller.model.requestedDays)
+                SpendDashboardCurrencySection(
+                    group: group,
+                    requestedDays: self.controller.model.requestedDays)
             }
         }
 
@@ -408,7 +414,7 @@ struct SpendDashboardEmptyState: Equatable {
     }
 }
 
-private struct SpendCurrencySection: View {
+struct SpendDashboardCurrencySection: View {
     let group: SpendDashboardModel.CurrencyGroup
     let requestedDays: Int
 
@@ -418,18 +424,12 @@ private struct SpendCurrencySection: View {
                 Text(self.group.currencyCode)
                     .font(.headline)
                 Spacer()
-                Text(self.group.totalCost.map {
-                    UsageFormatter.currencyString($0, currencyCode: self.group.currencyCode)
-                } ?? L("Spend unavailable"))
+                Text(spendDashboardGroupCostText(self.group))
                     .font(.title3.weight(.semibold))
                     .monospacedDigit()
             }
 
-            Text(
-                "\(L("Local estimated history")) · " +
-                    spendDashboardCoverageText(
-                        covered: self.group.coveredDayCount,
-                        requested: self.requestedDays))
+            Text(spendDashboardHistoryCaption(self.group, requestedDays: self.requestedDays))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -437,12 +437,10 @@ private struct SpendCurrencySection: View {
                 HStack(spacing: 24) {
                     SpendSummaryValue(
                         title: L("Estimated spend"),
-                        value: self.group.totalCost.map {
-                            UsageFormatter.currencyString($0, currencyCode: self.group.currencyCode)
-                        } ?? "—")
+                        value: self.group.totalCost == nil ? "—" : spendDashboardGroupCostText(self.group))
                     SpendSummaryValue(
                         title: L("Tracked tokens"),
-                        value: self.group.totalTokens.map(UsageFormatter.tokenCountString) ?? "—")
+                        value: spendDashboardGroupTokenText(self.group))
                     SpendSummaryValue(
                         title: L("Subscriptions"),
                         value: codexBarLocalizedInteger(self.group.providers.count))
@@ -452,6 +450,9 @@ private struct SpendCurrencySection: View {
 
             SpendProviderPanel(group: self.group)
             SpendModelPanel(group: self.group)
+            if !self.group.projects.isEmpty {
+                SpendProjectPanel(group: self.group)
+            }
             SpendDailyChart(group: self.group)
         }
     }
@@ -507,6 +508,9 @@ private struct SpendProviderPanel: View {
 
 private struct SpendModelPanel: View {
     let group: SpendDashboardModel.CurrencyGroup
+    @State private var showsAllRows = false
+
+    private static let collapsedRowCount = 8
 
     var body: some View {
         SpendDashboardPanel {
@@ -524,12 +528,12 @@ private struct SpendModelPanel: View {
                         .padding(.vertical, 10)
                 case .partial, .complete:
                     if presentation == .partial {
-                        Label(L("Model breakdown unavailable"), systemImage: "exclamationmark.triangle")
+                        Label(L("Partial model breakdown"), systemImage: "exclamationmark.triangle")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .padding(.bottom, 6)
                     }
-                    ForEach(self.group.models.prefix(8)) { row in
+                    ForEach(self.visibleRows) { row in
                         if row.rank > 1 {
                             Divider()
                         }
@@ -558,8 +562,87 @@ private struct SpendModelPanel: View {
                         }
                         .padding(.vertical, 9)
                     }
+                    SpendPanelExpandButton(
+                        rowCount: self.group.models.count,
+                        collapsedRowCount: Self.collapsedRowCount,
+                        showsAllRows: self.$showsAllRows)
                 }
             }
+        }
+    }
+
+    private var visibleRows: ArraySlice<SpendDashboardModel.ModelRow> {
+        self.group.models.prefix(
+            self.showsAllRows ? self.group.models.count : Self.collapsedRowCount)
+    }
+}
+
+private struct SpendProjectPanel: View {
+    let group: SpendDashboardModel.CurrencyGroup
+    @State private var showsAllRows = false
+
+    private static let collapsedRowCount = 8
+
+    var body: some View {
+        SpendDashboardPanel {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(L("Projects")).font(.headline).padding(.bottom, 8)
+                ForEach(self.visibleRows) { row in
+                    if row.rank > 1 {
+                        Divider()
+                    }
+                    HStack(spacing: 10) {
+                        Text(spendDashboardRankText(row.rank))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 26, alignment: .leading)
+                        Image(systemName: "folder")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.projectName).lineLimit(1)
+                            Text(row.providerName).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Text(row.totalCost.map {
+                            UsageFormatter.currencyString($0, currencyCode: self.group.currencyCode)
+                        } ?? "—")
+                            .monospacedDigit()
+                    }
+                    .padding(.vertical, 9)
+                }
+                SpendPanelExpandButton(
+                    rowCount: self.group.projects.count,
+                    collapsedRowCount: Self.collapsedRowCount,
+                    showsAllRows: self.$showsAllRows)
+            }
+        }
+    }
+
+    private var visibleRows: ArraySlice<SpendDashboardModel.ProjectRow> {
+        self.group.projects.prefix(
+            self.showsAllRows ? self.group.projects.count : Self.collapsedRowCount)
+    }
+}
+
+private struct SpendPanelExpandButton: View {
+    let rowCount: Int
+    let collapsedRowCount: Int
+    @Binding var showsAllRows: Bool
+
+    var body: some View {
+        if self.rowCount > self.collapsedRowCount {
+            Button {
+                self.showsAllRows.toggle()
+            } label: {
+                Text(
+                    self.showsAllRows
+                        ? L("Show less")
+                        : L("Show all (%d)", self.rowCount))
+                    .font(.caption)
+            }
+            .buttonStyle(.borderless)
+            .padding(.top, 6)
         }
     }
 }
@@ -653,7 +736,7 @@ private struct SpendDailyChart: View {
     }
 
     private func providerColor(_ provider: UsageProvider) -> Color {
-        let color = ProviderDescriptorRegistry.descriptor(for: provider).branding.color
+        let color = ProviderAccentPalette.color(for: provider)
         return Color(red: color.red, green: color.green, blue: color.blue)
     }
 }
@@ -686,4 +769,37 @@ private struct SpendDashboardPanel<Content: View>: View {
                     .strokeBorder(Color(nsColor: .separatorColor).opacity(0.35))
             }
     }
+}
+
+func spendDashboardGroupCostText(_ group: SpendDashboardModel.CurrencyGroup) -> String {
+    guard let cost = group.totalCost else { return L("Spend unavailable") }
+    let formatted = UsageFormatter.currencyString(cost, currencyCode: group.currencyCode)
+    return group.hasPartialCost ? "~\(formatted)" : formatted
+}
+
+func spendDashboardGroupTokenText(_ group: SpendDashboardModel.CurrencyGroup) -> String {
+    guard let tokens = group.totalTokens else { return "—" }
+    let formatted = UsageFormatter.tokenCountString(tokens)
+    return group.hasPartialTokens ? "~\(formatted)" : formatted
+}
+
+func spendDashboardPartialSubscriptionsText(_ group: SpendDashboardModel.CurrencyGroup) -> String {
+    L("%d of %d subscriptions have spend", group.pricedProviderCount, group.providers.count)
+}
+
+func spendDashboardHistoryCaption(
+    _ group: SpendDashboardModel.CurrencyGroup,
+    requestedDays: Int) -> String
+{
+    var parts: [String] = []
+    if group.hasPartialCost || group.hasPartialTokens {
+        parts.append(L("Partial estimate"))
+        if group.hasPartialCost {
+            parts.append(spendDashboardPartialSubscriptionsText(group))
+        }
+    } else {
+        parts.append(L("Local estimated history"))
+    }
+    parts.append(spendDashboardCoverageText(covered: group.coveredDayCount, requested: requestedDays))
+    return parts.joined(separator: " · ")
 }

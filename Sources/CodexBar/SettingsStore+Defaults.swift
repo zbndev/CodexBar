@@ -269,6 +269,14 @@ extension SettingsStore {
         }
     }
 
+    var workdayTickAppearance: WorkdayTickAppearance {
+        get { WorkdayTickAppearance(rawValue: self.defaultsState.workdayTickAppearanceRaw) ?? .subtle }
+        set {
+            self.defaultsState.workdayTickAppearanceRaw = newValue.rawValue
+            self.userDefaults.set(newValue.rawValue, forKey: "workdayTickAppearance")
+        }
+    }
+
     var usageBarsShowUsed: Bool {
         get { self.defaultsState.usageBarsShowUsed }
         set {
@@ -468,6 +476,17 @@ extension SettingsStore {
         set {
             self.defaultsState.menuBarLayoutGapRaw = newValue.rawValue
             self.userDefaults.set(newValue.rawValue, forKey: "menuBarLayoutGap")
+        }
+    }
+
+    /// User-tunable vertical nudge for the menu bar title, clamped to -20...20.
+    /// Positive moves content up, negative moves it down; 0 keeps the optical default.
+    var menuBarLayoutVerticalAdjustment: Int {
+        get { self.defaultsState.menuBarLayoutVerticalAdjustment }
+        set {
+            let clamped = max(-20, min(20, newValue))
+            self.defaultsState.menuBarLayoutVerticalAdjustment = clamped
+            self.userDefaults.set(clamped, forKey: "menuBarLayoutVerticalAdjustment")
         }
     }
 
@@ -696,11 +715,28 @@ extension SettingsStore {
         }
     }
 
+    var claudeModelScopedWeeklyUsageVisible: Bool {
+        get { self.defaultsState.claudeModelScopedWeeklyUsageVisible }
+        set {
+            self.defaultsState.claudeModelScopedWeeklyUsageVisible = newValue
+            self.userDefaults.set(newValue, forKey: "claudeModelScopedWeeklyUsageVisible")
+        }
+    }
+
     var codexSparkUsageVisible: Bool {
         get { self.defaultsState.codexSparkUsageVisible }
         set {
             self.defaultsState.codexSparkUsageVisible = newValue
             self.userDefaults.set(newValue, forKey: "codexSparkUsageVisible")
+        }
+    }
+
+    var codexExternalOAuthSourcesAllowed: Bool {
+        get { self.defaultsState.codexExternalOAuthSourcesAllowed }
+        set {
+            self.defaultsState.codexExternalOAuthSourcesAllowed = newValue
+            self.userDefaults.set(newValue, forKey: "codexExternalOAuthSourcesAllowed")
+            self.noteBackgroundWorkSettingsChanged()
         }
     }
 
@@ -728,15 +764,25 @@ extension SettingsStore {
         }
     }
 
-    var backgroundWorkLowPowerModeEnabled: Bool {
-        get { self.defaultsState.backgroundWorkLowPowerModeEnabled }
+    var backgroundWorkLowPowerModePreference: LowPowerModePreference {
+        get { self.defaultsState.backgroundWorkLowPowerModePreference }
         set {
-            self.defaultsState.backgroundWorkLowPowerModeEnabled = newValue
-            self.userDefaults.set(newValue, forKey: "backgroundWorkLowPowerModeEnabled")
+            self.defaultsState.backgroundWorkLowPowerModePreference = newValue
+            self.userDefaults.set(newValue.rawValue, forKey: "backgroundWorkLowPowerModePreference")
             CodexBarLog.logger(LogCategories.settings).info(
-                "Background work low power mode updated",
-                metadata: ["enabled": newValue ? "1" : "0"])
+                "Background work low power mode preference updated",
+                metadata: ["preference": newValue.rawValue])
             self.noteBackgroundWorkSettingsChanged()
+        }
+    }
+
+    /// Resolves `backgroundWorkLowPowerModePreference` against the live system Low Power Mode state
+    /// when the preference is `.automatic`.
+    var backgroundWorkLowPowerModeEnabled: Bool {
+        switch self.backgroundWorkLowPowerModePreference {
+        case .off: false
+        case .on: true
+        case .automatic: ProcessInfo.processInfo.isLowPowerModeEnabled
         }
     }
 

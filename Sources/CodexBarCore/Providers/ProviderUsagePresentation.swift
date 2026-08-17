@@ -60,6 +60,8 @@ public enum ProviderCostMenuCardStyle: Sendable, Equatable {
     case pointsBalance
     case prepaidCredits
     case payAsYouGoBalance
+    /// Monthly spend without a configured limit, with the remaining prepaid balance alongside it.
+    case payAsYouGoSpend
     case claude
     case apiSpend
     case clawRouter
@@ -96,13 +98,16 @@ public struct ProviderCostPresentation: Sendable, Equatable {
 public struct ProviderOptionalDetailsPresentation: Sendable, Equatable {
     public let hidesAllWithoutOptionalUsage: Bool
     public let hiddenTitlesWithoutOptionalUsage: Set<String>
+    public let costSummaryTitles: Set<String>
 
     public init(
         hidesAllWithoutOptionalUsage: Bool = false,
-        hiddenTitlesWithoutOptionalUsage: Set<String> = [])
+        hiddenTitlesWithoutOptionalUsage: Set<String> = [],
+        costSummaryTitles: Set<String> = [])
     {
         self.hidesAllWithoutOptionalUsage = hidesAllWithoutOptionalUsage
         self.hiddenTitlesWithoutOptionalUsage = hiddenTitlesWithoutOptionalUsage
+        self.costSummaryTitles = costSummaryTitles
     }
 }
 
@@ -206,18 +211,18 @@ public enum ProviderWidgetFamily: Sendable {
 public struct ProviderUsageNotesContext: Sendable {
     public let snapshot: UsageSnapshot?
     public let isRefreshing: Bool
-    public let tokenCostInlineDashboardEnabled: Bool
+    public let costSummaryInlineEnabled: Bool
     public let showOptionalUsage: Bool
 
     public init(
         snapshot: UsageSnapshot?,
         isRefreshing: Bool,
-        tokenCostInlineDashboardEnabled: Bool,
+        costSummaryInlineEnabled: Bool,
         showOptionalUsage: Bool)
     {
         self.snapshot = snapshot
         self.isRefreshing = isRefreshing
-        self.tokenCostInlineDashboardEnabled = tokenCostInlineDashboardEnabled
+        self.costSummaryInlineEnabled = costSummaryInlineEnabled
         self.showOptionalUsage = showOptionalUsage
     }
 }
@@ -424,6 +429,9 @@ public struct ProviderUsagePresentation: Sendable {
     public let requestedMenuBarLaneOrders: [ProviderMenuBarMetric: [ProviderUsageLane]]
     public let automaticSelectionPrioritizesExhaustedWindow: Bool
     public let secondaryGloballyCapsPrimary: Bool
+    /// Longer quota lanes that must have room before the primary session lane is usable.
+    /// Kept separate from widget policy until those surfaces adopt the same multi-lane projection.
+    public let primaryBindingQuotaLanes: Set<ProviderUsageLane>
     public let menuCard: ProviderMenuCardPresentation
     public let menu: ProviderMenuDescriptorPresentation
     public let planRow: ProviderPlanRowPresentation
@@ -451,6 +459,7 @@ public struct ProviderUsagePresentation: Sendable {
         planUtilizationSeriesNormalizer: @escaping PlanUtilizationSeriesNormalizer = { series, _ in series },
         widgetRowLimitResolver: @escaping WidgetRowLimitResolver = { _, _ in nil },
         secondaryGloballyCapsPrimary: Bool = false,
+        primaryBindingQuotaLanes: Set<ProviderUsageLane> = [],
         menuCard: ProviderMenuCardPresentation = ProviderMenuCardPresentation(),
         menu: ProviderMenuDescriptorPresentation = ProviderMenuDescriptorPresentation(),
         planRow: ProviderPlanRowPresentation = ProviderPlanRowPresentation(),
@@ -475,6 +484,7 @@ public struct ProviderUsagePresentation: Sendable {
         self.planUtilizationSeriesNormalizer = planUtilizationSeriesNormalizer
         self.widgetRowLimitResolver = widgetRowLimitResolver
         self.secondaryGloballyCapsPrimary = secondaryGloballyCapsPrimary
+        self.primaryBindingQuotaLanes = primaryBindingQuotaLanes
         self.menuCard = menuCard
         self.menu = menu
         self.planRow = planRow

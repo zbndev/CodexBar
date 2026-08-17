@@ -71,12 +71,15 @@ jobs:
             exit 1
           fi
 
+  # Debian 13's glibc 2.41 is exactly the supported floor, so the test host
+  # drops no target while providing libadwaita 1.7 instead of Ubuntu 24.04's 1.5.
   # Runs alongside `build` rather than ahead of it: the debug build the tests
   # need and the release build the packages need share nothing, so serializing
   # them only added the shorter of the two to the critical path.
   test:
     needs: validate
     runs-on: ubuntu-24.04
+    container: debian:13
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -87,14 +90,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y \
-            pkg-config libgtk-4-dev libwebkitgtk-6.0-dev libcurl4-openssl-dev
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y \
+            pkg-config libgtk-4-dev libadwaita-1-dev libwebkitgtk-6.0-dev \
+            libcurl4-openssl-dev librsvg2-common xvfb
+          pkg-config --modversion gtk4 libadwaita-1
 
       - uses: ./CodexBar/.github/actions/setup-swift-linux
+        with:
+          method: tarball
 
       - name: Run the tests
-        run: swift test --package-path linux
+        run: xvfb-run -a swift test --package-path linux
 
   build:
     # Not a supported target — a build host. Its glibc (2.39) is the oldest of

@@ -1,7 +1,7 @@
 name: Set up Swift for Linux
 description: >-
-  Installs a pinned Swift toolchain through swiftly, verifying the swiftly
-  archive against Swift's published signing key, and caches the result.
+  Installs a pinned Swift toolchain through swiftly or a release tarball,
+  verifying every downloaded archive against Swift's published signing keys.
 
 # Lives here rather than inline in the workflow because more than one job needs
 # a toolchain, and the signature check below is not something to keep two
@@ -16,25 +16,49 @@ inputs:
     description: swiftly release used to install the toolchain.
     required: false
     default: "1.1.3"
+  method:
+    description: Installation method; either swiftly or tarball.
+    required: false
+    default: swiftly
   signing-fingerprint:
     description: GPG fingerprint the swiftly archive's signature must carry.
     required: false
     default: E813C892820A6FA13755B268F167DF1ACF9CE069
+  toolchain-signing-fingerprint:
+    description: GPG fingerprint the Swift release tarball's signature must carry.
+    required: false
+    default: 52BB7E3DE28A71BE22EC05FFEF80A866B47A981F
 
 runs:
   using: composite
   steps:
+    - name: Validate Swift installation method
+      shell: bash
+      env:
+        INSTALL_METHOD: ${{ inputs.method }}
+      run: |
+        set -euo pipefail
+        case "$INSTALL_METHOD" in
+          swiftly|tarball) ;;
+          *)
+            echo "::error::Unknown Swift installation method: $INSTALL_METHOD"
+            exit 1
+            ;;
+        esac
+
     # Two jobs may restore this key at once. On a cold cache both miss, both
     # install, and both try to save — the loser logs "already exists" and moves
     # on, which is noisy but harmless.
     - name: Restore Swift toolchain cache
       id: swift-toolchain-cache
+      if: inputs.method == 'swiftly'
       uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ~/.local/share/swiftly
         key: swift-${{ runner.os }}-${{ runner.arch }}-${{ inputs.swift-version }}-swiftly-${{ inputs.swiftly-version }}
 
     - name: Install Swift ${{ inputs.swift-version }} via swiftly
+      if: inputs.method == 'swiftly'
       shell: bash
       env:
         SWIFT_VERSION: ${{ inputs.swift-version }}
@@ -91,3 +115,68 @@ runs:
 
         hash -r
         swift --version
+
+    - name: Install Swift ${{ inputs.swift-version }} from its release tarball
+      if: inputs.method == 'tarball'
+      shell: bash
+      env:
+        SWIFT_VERSION: ${{ inputs.swift-version }}
+        SWIFT_TOOLCHAIN_SIGNING_FINGERPRINT: ${{ inputs.toolchain-signing-fingerprint }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$(uname -m)" != "x86_64" ]]; then
+          echo "::error::The tarball method currently supports x86_64 runners only"
+          exit 1
+        fi
+
+        run_as_root() {
+          if [[ "$EUID" -eq 0 ]]; then
+            "$@"
+          else
+            sudo "$@"
+          fi
+        }
+
+        required_packages=(
+          binutils ca-certificates curl git gnupg2 libcurl4-openssl-dev
+          libedit2 libgcc-12-dev libncurses6 libpython3-dev libsqlite3-0
+          libstdc++-12-dev libxml2-dev libz3-dev pkg-config tzdata unzip zlib1g-dev
+        )
+        missing_packages=()
+        for package in "${required_packages[@]}"; do
+          if ! dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q "install ok installed"; then
+            missing_packages+=("$package")
+          fi
+        done
+        if [[ "${#missing_packages[@]}" -gt 0 ]]; then
+          run_as_root apt-get update
+          run_as_root apt-get install -y "${missing_packages[@]}"
+        fi
+
+        SWIFT_RELEASE="swift-${SWIFT_VERSION}-release"
+        SWIFT_ARCHIVE_NAME="swift-${SWIFT_VERSION}-RELEASE-ubuntu24.04.tar.gz"
+        SWIFT_DOWNLOAD_ROOT="https://download.swift.org/${SWIFT_RELEASE}/ubuntu2404/swift-${SWIFT_VERSION}-RELEASE"
+        SWIFT_ARCHIVE="$RUNNER_TEMP/$SWIFT_ARCHIVE_NAME"
+        SWIFT_SIGNATURE="${SWIFT_ARCHIVE}.sig"
+        SWIFT_GNUPGHOME="$(mktemp -d)"
+        SWIFT_KEYS="$RUNNER_TEMP/swift-signing-keys.asc"
+
+        chmod 700 "$SWIFT_GNUPGHOME"
+        curl -fsSL "$SWIFT_DOWNLOAD_ROOT/$SWIFT_ARCHIVE_NAME" -o "$SWIFT_ARCHIVE"
+        curl -fsSL "$SWIFT_DOWNLOAD_ROOT/$SWIFT_ARCHIVE_NAME.sig" -o "$SWIFT_SIGNATURE"
+        curl -fsSL --compressed "https://www.swift.org/keys/all-keys.asc" -o "$SWIFT_KEYS"
+        GNUPGHOME="$SWIFT_GNUPGHOME" gpg --batch --import "$SWIFT_KEYS"
+        SIGNATURE_STATUS="$(GNUPGHOME="$SWIFT_GNUPGHOME" gpg --batch --status-fd=1 \
+          --verify "$SWIFT_SIGNATURE" "$SWIFT_ARCHIVE" 2>&1)"
+        printf '%s\n' "$SIGNATURE_STATUS"
+        grep -Fq "[GNUPG:] VALIDSIG ${SWIFT_TOOLCHAIN_SIGNING_FINGERPRINT} " <<< "$SIGNATURE_STATUS"
+
+        if [[ -e /opt/swift ]]; then
+          echo "::error::Refusing to overwrite an existing /opt/swift toolchain"
+          exit 1
+        fi
+        run_as_root mkdir -p /opt/swift
+        run_as_root tar -xzf "$SWIFT_ARCHIVE" -C /opt/swift --strip-components=1
+        echo "/opt/swift/usr/bin" >> "$GITHUB_PATH"
+        /opt/swift/usr/bin/swift --version

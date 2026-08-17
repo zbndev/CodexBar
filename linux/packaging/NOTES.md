@@ -6,11 +6,16 @@ dependency list; do not edit these from memory.
 ## Build floor
 
 - Swift: 6.3.3
-- Development machine: gtk4 4.22.4, webkitgtk-6.0 2.52.5 (Arch)
+- Development machine: gtk4 4.22.4, libadwaita 1.9.3, webkitgtk-6.0 2.52.5 (Arch)
 - `ubuntu:24.04`: gtk4 **4.14.5**, webkitgtk-6.0 **2.52.3**, glibc **2.39**
-- `debian:13`: gtk4 **4.18.6**, webkitgtk-6.0 **2.52.5**, glibc **2.41**
-- Verdict: **the floor is Debian 13 / gtk4 4.18.** Ubuntu 24.04 is not
-  supported.
+- `debian:13`: gtk4 **4.18.6**, libadwaita **1.7.6**, webkitgtk-6.0
+  **2.52.5**, glibc **2.41**
+- The Ubuntu 24.04 Swift 6.3.3 release tarball runs on Debian 13 when its
+  runtime packages, including `libncurses6`, are installed. `swiftly` is
+  bypassed there because its platform check rejects Debian; Swift itself does
+  not. The tarball and its published `.sig` are verified before extraction.
+- Verdict: **Debian 13 / gtk4 4.18 / libadwaita 1.7 is both the supported floor
+  and the test host.** Ubuntu 24.04 is not supported.
 
 ## Verified installs
 
@@ -32,9 +37,10 @@ Release artifacts must be **built on `ubuntu:24.04`**, which is what
   `libm.so.6: version 'GLIBC_2.43' not found`. Ubuntu 24.04 has the oldest
   glibc of any candidate host (2.39), so its output runs everywhere newer —
   verified on Debian 13 (2.41), Ubuntu 25.10 and Fedora 42.
-- Building *in* `debian:13` is not an option: swiftly refuses it outright with
-  `Error: Unsupported Linux platform`. Swift.org publishes toolchains for
-  Ubuntu, Amazon Linux and RHEL, not Debian.
+- `swiftly` still refuses `debian:13` with `Error: Unsupported Linux platform`,
+  but that is a platform-policy check rather than a toolchain incompatibility.
+  The test job bypasses it with Swift.org's signed Ubuntu 24.04 tarball. The
+  release build remains on Ubuntu 24.04 until the native-port release phase.
 
 So 24.04 is a build host but not a supported target — the two lists differ on
 purpose.

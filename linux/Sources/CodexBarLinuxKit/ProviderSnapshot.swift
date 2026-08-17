@@ -1,21 +1,11 @@
 import CodexBarCore
 import Foundation
 
-extension ProviderColor {
-    /// `#RRGGBB`, for handing straight to CSS.
-    public var hexString: String {
-        func channel(_ value: Double) -> Int {
-            Int((value * 255).rounded()).clamped(to: 0...255)
-        }
-        return String(format: "#%02X%02X%02X", channel(self.red), channel(self.green), channel(self.blue))
-    }
-}
-
-extension Int {
-    fileprivate func clamped(to range: ClosedRange<Int>) -> Int {
-        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
-    }
-}
+// `ProviderColor.hexString` used to live here as an extension. Core gained the
+// same property as a member in the 2026-08-17 sync, and the two are
+// indistinguishable at the call site — same uppercase `#RRGGBB`, same clamping
+// of out-of-range channels — so every use became ambiguous. Core's is the one
+// that survives; this file keeps none of its own.
 
 public enum ProviderOperationalStatus: String, Codable, Equatable, Sendable {
     case unknown

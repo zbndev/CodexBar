@@ -13,7 +13,7 @@ if CommandLine.arguments.dropFirst().contains("--version") {
 // Top-level code is main-actor isolated, but the GTK callbacks below are plain
 // `@Sendable` closures invoked by the GTK main loop. These globals are confined
 // to the GTK thread by construction — nothing else ever touches them.
-let app = GtkApplication(applicationID: "app.codexbar.linux")
+let app = AdwApplication(applicationID: "app.codexbar.linux")
 nonisolated(unsafe) var window: GtkWindow?
 nonisolated(unsafe) var webView: WebView?
 nonisolated(unsafe) var bridge: Bridge?

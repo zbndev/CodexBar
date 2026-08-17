@@ -1,0 +1,4 @@
+module CAdwaita [system] {
+    header "shim.h"
+    export *
+}

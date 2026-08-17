@@ -17,6 +17,11 @@ let package = Package(
             pkgConfig: "gtk4",
             providers: [.apt(["libgtk-4-dev"])]),
         .systemLibrary(
+            name: "CAdwaita",
+            path: "Sources/CAdwaita",
+            pkgConfig: "libadwaita-1",
+            providers: [.apt(["libadwaita-1-dev"])]),
+        .systemLibrary(
             name: "CWebKitGTK",
             path: "Sources/CWebKitGTK",
             pkgConfig: "webkitgtk-6.0",
@@ -24,6 +29,7 @@ let package = Package(
         .target(
             name: "CodexBarLinuxKit",
             dependencies: [
+                "CAdwaita",
                 "CGtk4",
                 "CWebKitGTK",
                 .product(name: "CodexBarCore", package: "CodexBar"),

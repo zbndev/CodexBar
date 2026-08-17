@@ -10,7 +10,7 @@ import Foundation
 /// `@unchecked Sendable` for the same reason as `GtkWindow`: the instance is
 /// confined to the GTK main-loop thread, and callbacks reach it only through
 /// `MainLoopDispatch.onMainLoop`.
-public final class GtkApplication: @unchecked Sendable {
+public class GtkApplication: @unchecked Sendable {
     public let pointer: OpaquePointer
 
     /// Called once GTK has finished starting up. Create windows here, not before.
@@ -24,6 +24,10 @@ public final class GtkApplication: @unchecked Sendable {
             fatalError("gtk_application_new returned NULL for \(applicationID)")
         }
         self.pointer = OpaquePointer(app)
+    }
+
+    init(pointer: OpaquePointer) {
+        self.pointer = pointer
     }
 
     /// Runs the GTK main loop. Returns only when the application quits.
